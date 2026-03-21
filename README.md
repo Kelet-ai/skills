@@ -70,4 +70,4 @@ After integrating with the `kelet-integration` skill:
 
 ## License
 
-MIT
+[CC BY 4.0](LICENSE)

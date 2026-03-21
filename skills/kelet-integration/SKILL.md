@@ -1,7 +1,7 @@
 ---
 name: kelet-integration
 description: Use when integrating Kelet into an AI application — setting up tracing, user feedback collection, and session correlation across Python, TypeScript/Node.js, Next.js, and React frontends. Triggers on requests to "add Kelet", "instrument my agent", "set up Kelet tracing", "add feedback collection", or "integrate with Kelet".
-license: MIT
+license: CC-BY-4.0
 metadata:
   author: kelet-ai
   url: https://kelet.ai
