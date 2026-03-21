@@ -1,57 +1,62 @@
 # Kelet Agent Skills
 
-Claude Code skills for integrating [Kelet](https://kelet.ai) — automated Root Cause Analysis for AI agent failures — into your AI applications.
+[Claude Code](https://claude.ai/code) skills for integrating [Kelet](https://kelet.ai) into AI applications.
 
-## Available Skills
+Kelet is an AI agent that does Root Cause Analysis for AI agent failures: it analyzes production traces and user signals at scale to tell you what's failing, why, and how to fix it — so you don't spend hours scrolling through traces manually.
 
-### `kelet-integration`
+These skills teach Claude how to instrument your app with Kelet end-to-end.
 
-Interactively instruments your AI application with Kelet end-to-end: maps your agentic flows, brainstorms failure-mode-specific signals, sets up API keys, and writes the integration code.
+## Skills
 
-**Covers:** Python (pydantic-ai/FastAPI), TypeScript/Node.js, Next.js, React frontend (KeletProvider + VoteFeedback widget), session ID propagation.
+| Skill | Description |
+|---|---|
+| [`kelet-integration`](skills/kelet-integration/) | Interactively integrates Kelet into an AI app: maps agentic flows, brainstorms failure-mode-specific signals, sets up API keys, and writes the instrumentation code. Covers Python, TypeScript/Node.js, Next.js, and React. |
 
 ## Installation
 
 ### Claude Code
 
-```bash
-/plugin install kelet-integration@kelet-skills
+Add the Kelet marketplace and install the skill:
+
 ```
-
-Or add as a marketplace:
-
-```bash
 /plugin marketplace add Kelet-ai/skills
-```
-
-Then install a skill:
-
-```
 /plugin install kelet-integration@kelet-skills
 ```
 
 ### Manual
 
-Clone this repo and load the skill directory directly in Claude Code settings.
+Clone this repo and point Claude Code to the `skills/` directory in your plugin settings.
 
 ## Usage
 
-Once installed, mention Kelet in your prompt:
+Once installed, just mention Kelet in your prompt:
 
-> "Integrate Kelet into my FastAPI app"
-> "Add Kelet tracing to my Next.js project"
-> "Set up user feedback collection with Kelet"
+```
+Integrate Kelet into my FastAPI app
+Add Kelet tracing and user feedback to my Next.js project
+Set up Kelet for my multi-agent system
+```
 
-The skill will walk you through the full integration interactively.
+The skill walks through your project interactively — mapping your agentic flows, proposing signals specific to your failure modes, and writing the integration code.
 
-## What is Kelet?
+## What You Get
 
-Kelet analyzes your AI agent's production traces + user signals to automatically identify failure patterns, generate root cause hypotheses, and suggest prompt fixes — so you don't have to scroll through 10,000 traces manually.
+After integrating with the `kelet-integration` skill:
 
-- [Sign up](https://console.kelet.ai)
-- [Documentation](https://docs.kelet.ai)
+- **Traces** — every LLM call, token count, latency, and error captured automatically
+- **Sessions** — traces grouped by conversation for full RCA context
+- **Signals** — user feedback (👍/👎, edits) correlated to the exact trace that produced the response
+- **Issues** — Kelet clusters failure patterns and generates root cause hypotheses automatically
+
+[Sign up at console.kelet.ai →](https://console.kelet.ai)
+
+## Links
+
+- [Kelet Platform](https://kelet.ai)
+- [Console](https://console.kelet.ai)
 - [Python SDK](https://github.com/Kelet-ai/python-sdk)
 - [TypeScript SDK](https://github.com/Kelet-ai/typescript-sdk)
+- [Agent Skills spec](https://agentskills.io/specification)
 
 ## License
 
