@@ -5,9 +5,9 @@
 | Stack | Package |
 |---|---|
 | Python | `kelet` (pip/uv) |
-| TypeScript / Node.js | `kelet` (npm) |
+| TypeScript / Node.js | `kelet @opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http` (npm) |
 | React frontend | `@kelet-ai/feedback-ui` (npm) |
-| Python extras | `kelet[anthropic]`, `kelet[openai]`, `kelet[langchain]`, `kelet[all]` |
+| Python extras | `kelet[anthropic]`, `kelet[openai]`, `kelet[langchain]`, `kelet[all]` — if not installed, `configure()` silently skips that library |
 
 ## Python SDK
 
@@ -21,13 +21,13 @@ Functions (all in `kelet` namespace):
 
 ## TypeScript SDK
 
-**Critical difference from Python**: `agenticSession` is **callback-based**, not a context manager.
+**Critical difference from Python**: `agenticSession` is **callback-based**, not a context manager. AsyncLocalStorage propagates context through the callback's call tree — there's no `with`-equivalent in Node.js, so the callback IS the scope boundary. Writing `await agenticSession(...)` without a callback silently breaks context propagation.
 
 ```
 agenticSession({ sessionId, userId? }, async () => { ... })  // returns callback's return value
 ```
 
-Uses `AsyncLocalStorage` — Node.js only, not browser-compatible.
+Node.js only (not browser-compatible). Inside the callback, `signal()` auto-resolves `sessionId` from context.
 
 Other functions:
 - `configure({ apiKey, project, apiUrl })` — call once at startup
@@ -44,7 +44,8 @@ Use `KeletExporter` in `instrumentation.ts` via `@vercel/otel`:
 - `KeletProvider({ apiKey?, project, baseUrl? })` — `apiKey` optional if a parent provider already set it
 - `VoteFeedback.Root({ session_id, onFeedback? })` — compound component root
 - `VoteFeedback.UpvoteButton`, `VoteFeedback.DownvoteButton`, `VoteFeedback.Popover`, `VoteFeedback.Textarea`, `VoteFeedback.SubmitButton`
-- `useFeedbackState<T>(initialState, session_id, options?)` — drop-in for `useState`; tracks edits automatically
+- `useFeedbackState<T>(initialState, session_id, options?)` — drop-in for `useState`; tracks edits automatically. Second arg to each `setState` call sets trigger name: `setState(value, "ai_generation")` vs `setState(value, "manual_edit")`
+- `useFeedbackReducer<S, A>(reducer, initialState, session_id)` — drop-in for `useReducer`; action `type` auto-becomes trigger name
 
 ## Env Vars
 

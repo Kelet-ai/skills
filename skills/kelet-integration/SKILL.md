@@ -5,11 +5,14 @@ license: MIT
 metadata:
   author: kelet-ai
   url: https://kelet.ai
+  version: "1.0.0"
 ---
 
 # Kelet Integration
 
 Kelet is an AI agent that does Root Cause Analysis for AI app failures. It ingests traces + user signals → clusters failure patterns → generates hypotheses → suggests fixes. This skill integrates Kelet into a developer's AI application end-to-end.
+
+**Kelet never crashes your app.** All SDK errors — misconfigured keys, network failures, wrong session IDs, missing extras — are swallowed silently to ensure QoS. A misconfigured integration looks identical to a working one. The Common Mistakes section documents every known silent failure mode.
 
 **Always follow phases in order: 0a → 0b → 0c → 0d → 1 → implement.**
 
@@ -44,7 +47,7 @@ Config: .env / .envrc / k8s
 
 ## Phase 0b: Agentic Workflow + UX Mapping
 
-Map each agentic flow before deciding what to instrument.
+The purpose of this phase is to map what "failure" looks like for Kelet's RCA engine — Kelet clusters spans by failure pattern, so you need to understand failure modes before proposing signals.
 
 **Workflow** (what the agent does):
 - Steps and decision points
@@ -56,19 +59,15 @@ Map each agentic flow before deciding what to instrument.
 - Where do users react? (edit it, retry, copy, ignore, complain)
 - What implicit behaviors signal dissatisfaction? (abandon, rephrase, undo)
 
+Outputs from this phase feed directly into signal selection in 0c — each identified failure mode becomes a signal candidate.
+
 ---
 
 ## Phase 0c: Signal Brainstorming
 
 Reason about failure modes, then propose specific signals — not a generic list.
 
-**Thinking process per flow:**
-1. What does a bad output look like at each step?
-2. Would the user notice immediately or only after consequences?
-3. What would they do when they notice? (edit, retry, abandon)
-4. Can it be detected automatically? (API error, timeout, output quality)
-
-**Propose 3–5 signals per flow** (cap at 5 — focus on highest signal-to-noise). For each: what it captures, how it manifests, what failure it reveals to Kelet's RCA engine.
+Kelet clusters failure patterns across sessions — noisy or redundant signals dilute clustering quality. **Propose 3–5 signals per flow** (cap at 5, prioritized by specificity to the failure mode). For each: what it captures, how it manifests, what failure it reveals to Kelet's RCA engine.
 
 **CRITICAL: Synthetic signals are the platform's responsibility.**
 If the developer asks about LLM-as-judge or automated quality metrics → point them to `https://console.kelet.ai/synthetics`. Kelet manages evaluators there on their behalf. Only write `source=SYNTHETIC` signal code if the developer explicitly asks AND the platform cannot implement it (explain why + ask to confirm).
@@ -118,11 +117,19 @@ Add both vars to `.gitignore` if not already present.
 
 See [references/api.md](references/api.md) for exact function names, package names, and the one TS gotcha.
 
-**Python**: `kelet.configure()` at startup (reads `KELET_API_KEY`, raises `ValueError` if missing, auto-instruments pydantic-ai/Anthropic/OpenAI/LangChain). Wrap each AI call with `agentic_session(session_id=..., project=...)`. For multi-agent flows, use `kelet.agent(name=...)` to name each agent — readable traces. Streaming: wrap the **entire** generator body including final sentinel or trailing spans are silently lost. Logfire users: `kelet.configure()` detects the existing `TracerProvider` and adds its processor — no conflict.
+**Python**: `kelet.configure()` at startup auto-instruments pydantic-ai/Anthropic/OpenAI/LangChain. Each LLM framework extra must be installed (`kelet[anthropic]`, `kelet[openai]`, etc.) — if missing, `configure()` silently skips that library. `agentic_session()` is **optional for supported frameworks** — pydantic-ai sessions are captured automatically; only add it when using lower-level SDKs or when you need a custom session ID. `kelet.agent(name=...)` — use when: (a) multiple agents run in one session and need separate attribution, or (b) your framework doesn't expose agent names natively (pydantic-ai does; OpenAI/Anthropic/raw SDKs don't — Kelet can't infer it). Logfire users: `kelet.configure()` detects the existing `TracerProvider` — no conflict.
 
-**TypeScript/Node.js**: `agenticSession` is **callback-based** (not a context manager) — this is the one non-obvious difference. Uses `AsyncLocalStorage`, Node.js only.
+Streaming: wrap the **entire** generator body (not the caller), including the final sentinel — trailing spans are silently lost otherwise:
+```python
+async def stream_response():
+    async with kelet.agentic_session(session_id=...):
+        async for chunk in llm.stream(...):  # sentinel included in scope
+            yield chunk
+```
 
-**Next.js**: `KeletExporter` in `instrumentation.ts` via `@vercel/otel`.
+**TypeScript/Node.js**: `agenticSession` is **callback-based** (not a context manager). AsyncLocalStorage context propagates through the callback's call tree — there's no `with`-equivalent in Node.js, so the callback IS the scope boundary. Node.js only (not browser-compatible). Also requires OTEL peer deps alongside `kelet` — see Implementation Steps.
+
+**Next.js**: `KeletExporter` in `instrumentation.ts` via `@vercel/otel`. Two required steps often missed: (1) `experimental: { instrumentationHook: true }` in `next.config.js` — without it, `instrumentation.ts` never runs (**Silent**); (2) each Vercel AI SDK call needs `experimental_telemetry: { isEnabled: true }` — telemetry is off by default (**Silent**).
 
 **Multi-project apps**: Call `configure()` once with no project. Override per call with `agentic_session(project=...)`. W3C Baggage propagates the project to downstream microservices automatically.
 
@@ -131,9 +138,13 @@ See [references/api.md](references/api.md) for exact function names, package nam
 **VoteFeedback**: `session_id` passed to `VoteFeedback.Root` must exactly match what the server used in `agentic_session()`. If they differ, feedback is captured but silently unlinked from the trace.
 
 **Session ID propagation** (how feedback links to traces):
-Client generates UUID → sends in request body → server uses in `agentic_session(session_id=...)` → server returns it as `X-Session-ID` response header → client passes it to `VoteFeedback.Root`. This is what correlates the user's vote to the LLM call that produced the response.
+Client generates UUID → sends in request body → server uses in `agentic_session(session_id=...)` → server returns it as `X-Session-ID` response header → client passes it to `VoteFeedback.Root`. (**Silent if mismatched — no error, feedback captured but unlinked from the trace.**)
 
-**Edit signals**: `useFeedbackState(initialState, session_id)` is a drop-in for `useState`. It automatically tracks user edits to AI-generated content as implicit feedback signals.
+**Implicit feedback — three patterns, each for a different use case:**
+- **`useFeedbackState`**: drop-in for `useState`. Each `setState` call accepts a trigger name as second arg — tag AI-generated updates `"ai_generation"` and user edits `"manual_refinement"`. Without trigger names, all state changes look identical and Kelet can't distinguish "user accepted AI output" from "user corrected it."
+- **`useFeedbackReducer`**: drop-in for `useReducer`. Action `type` fields automatically become trigger names — zero extra instrumentation for reducer-based state.
+
+**Which to use:** Explicit rating of AI response → `VoteFeedback`. Editable AI output → `useFeedbackState` with trigger names. Complex state with action types → `useFeedbackReducer`.
 
 ---
 
@@ -156,9 +167,10 @@ User-facing with React?
 └─► No  ──► Server-side only
 
 Feedback signals?
-├─► Explicit (votes)  ──► VoteFeedback / kelet.signal(kind=FEEDBACK, source=HUMAN)
-├─► Implicit (edits)  ──► useFeedbackState
-└─► Automated metrics ──► Platform synthetics → console.kelet.ai/synthetics
+├─► Explicit (votes)     ──► VoteFeedback / kelet.signal(kind=FEEDBACK, source=HUMAN)
+├─► Implicit (edits)     ──► useFeedbackState (tag AI vs human updates with trigger names)
+├─► Reducer-based state  ──► useFeedbackReducer (action.type = trigger name automatically)
+└─► Automated metrics    ──► Platform synthetics → console.kelet.ai/synthetics
 ```
 
 ---
@@ -167,7 +179,7 @@ Feedback signals?
 
 1. **Project Map** — infer from files, confirm flow → project mapping
 2. **API keys** — ask for keys, detect config pattern, write to correct file
-3. **Install** — `kelet` (server), `@kelet-ai/feedback-ui` (React)
+3. **Install** — Python: `kelet[all]` or per-library extras. Node.js/Next.js: `kelet` + OTEL peer deps (`@opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http`) — Python needs no OTEL deps. React: `@kelet-ai/feedback-ui`
 4. **Instrument server** — `configure()` at startup + `agentic_session()` per flow
 5. **Instrument frontend** — `KeletProvider` at root, nested per flow if multi-project
 6. **Connect feedback** — VoteFeedback + session ID propagation if user-facing
@@ -184,3 +196,8 @@ Feedback signals?
 | `agentic_session` exits before streaming generator finishes | Traces appear incomplete | Wrap entire generator body including `[DONE]` sentinel. **Silent.** |
 | VoteFeedback `session_id` doesn't match server session | Feedback unlinked from traces | Capture `X-Session-ID` header; use exact same value. **Silent.** |
 | `configure(project=...)` on a multi-project app | All sessions attributed to one project | Use `configure()` with no project; override in `agentic_session()`. |
+| No `kelet.agent(name=...)` with OpenAI/Anthropic/AI SDK | Kelet shows unattributed spans — RCA can't identify which agent failed | pydantic-ai exposes names natively (auto-inferred); raw SDKs don't. **Silent.** |
+| Python extra not installed (e.g. missing `kelet[anthropic]`) | `configure()` succeeds, zero traces from that library | Install the matching extra — Kelet silently skips uninstrumented libraries. **Silent.** |
+| Node.js: `npm install kelet` only, missing OTEL peer deps | Import errors or no traces | Add `@opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http`. Python needs no peer deps. |
+| Next.js: missing `instrumentationHook: true` in `next.config.js` | `instrumentation.ts` exists but never runs, zero traces | Add `experimental: { instrumentationHook: true }` to `next.config.js`. **Silent.** |
+| Vercel AI SDK: missing `experimental_telemetry: { isEnabled: true }` per call | `configure()` succeeds, zero traces from AI SDK calls | Vercel AI SDK telemetry is off by default. Must opt in per call. **Silent.** |
