@@ -1,6 +1,10 @@
 ---
 name: kelet-integration
 description: Use when integrating Kelet into an AI application — setting up tracing, user feedback collection, and session correlation across Python, TypeScript/Node.js, Next.js, and React frontends. Triggers on requests to "add Kelet", "instrument my agent", "set up Kelet tracing", "add feedback collection", or "integrate with Kelet".
+license: MIT
+metadata:
+  author: kelet-ai
+  url: https://kelet.ai
 ---
 
 # Kelet Integration
@@ -79,7 +83,7 @@ If the developer asks about LLM-as-judge or automated quality metrics → point 
 >
 > Platform synthetics (set up at console.kelet.ai/synthetics): [ ] LLM-as-judge for [quality concern]
 
-See [reference/signals.md](reference/signals.md) for signal kinds, sources, and when to use each.
+See [references/signals.md](references/signals.md) for signal kinds, sources, and when to use each.
 
 ---
 
@@ -112,7 +116,7 @@ Add both vars to `.gitignore` if not already present.
 
 ## Implementation: Key Concepts by Stack
 
-See [reference/api.md](reference/api.md) for exact function names, package names, and the one TS gotcha.
+See [references/api.md](references/api.md) for exact function names, package names, and the one TS gotcha.
 
 **Python**: `kelet.configure()` at startup (reads `KELET_API_KEY`, raises `ValueError` if missing, auto-instruments pydantic-ai/Anthropic/OpenAI/LangChain). Wrap each AI call with `agentic_session(session_id=..., project=...)`. For multi-agent flows, use `kelet.agent(name=...)` to name each agent — readable traces. Streaming: wrap the **entire** generator body including final sentinel or trailing spans are silently lost. Logfire users: `kelet.configure()` detects the existing `TracerProvider` and adds its processor — no conflict.
 
