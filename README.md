@@ -23,9 +23,19 @@ Add the Kelet marketplace and install the skill:
 /plugin install kelet-integration@kelet-skills
 ```
 
+### Other agents (Cursor, Copilot, Windsurf, Cline, and more)
+
+Via [skills.sh](https://skills.sh) — works with 20+ agents:
+
+```bash
+npx skills add Kelet-ai/skills
+# or:
+bunx skills add Kelet-ai/skills
+```
+
 ### Manual
 
-Clone this repo and point Claude Code to the `skills/` directory in your plugin settings.
+Clone this repo and copy `skills/kelet-integration/` into your agent's skills directory.
 
 ## Usage
 
