@@ -98,6 +98,18 @@ See [references/signals.md](references/signals.md) for signal kinds, sources, an
 
 ---
 
+## Sessions
+
+A session is the logical boundary of one unit of work — all LLM calls, tool uses, agent hops, and retrievals that belong to the same context. Not tied to conversations: a batch processing job, a scheduled pipeline, or a chat thread are all valid sessions. New context = new session.
+
+**The framework orchestrates the flow** (pydantic-ai runs your agent loop, LangGraph manages your graph execution, a LangChain chain runs end-to-end): Kelet infers sessions automatically — no `agentic_session()` needed. Supported frameworks: pydantic-ai, LangChain/LangGraph, LlamaIndex, CrewAI, Haystack, DSPy, LiteLLM, Langfuse, and any framework using OpenInference or OpenLLMetry instrumentation. If the framework isn't listed, research whether it uses one of these instrumentation libraries before omitting `agentic_session()`.
+
+Note: **Vercel AI SDK does not set session IDs automatically** — use `agenticSession()` at the route level (see Next.js section).
+
+**You own the loop** (you write the code that calls agent A, passes results to agent B, chains steps in Temporal, a custom loop, or any orchestrator you built — even if individual steps use a supported framework internally): the framework doesn't set a session ID for the overall flow. You MUST use `agentic_session(session_id=...)` / `agenticSession({ sessionId }, callback)`. (**Silent if omitted — spans appear as unlinked individual traces.**)
+
+---
+
 ## Phase 1: API Key Setup
 
 Two key types — never mix them:
@@ -117,7 +129,7 @@ Add both vars to `.gitignore` if not already present.
 
 See [references/api.md](references/api.md) for exact function names, package names, and the one TS gotcha.
 
-**Python**: `kelet.configure()` at startup auto-instruments pydantic-ai/Anthropic/OpenAI/LangChain. Each LLM framework extra must be installed (`kelet[anthropic]`, `kelet[openai]`, etc.) — if missing, `configure()` silently skips that library. `agentic_session()` is **optional for supported frameworks** — pydantic-ai sessions are captured automatically; only add it when using lower-level SDKs or when you need a custom session ID. `kelet.agent(name=...)` — use when: (a) multiple agents run in one session and need separate attribution, or (b) your framework doesn't expose agent names natively (pydantic-ai does; OpenAI/Anthropic/raw SDKs don't — Kelet can't infer it). Logfire users: `kelet.configure()` detects the existing `TracerProvider` — no conflict.
+**Python**: `kelet.configure()` at startup auto-instruments pydantic-ai/Anthropic/OpenAI/LangChain. Each LLM framework extra must be installed (`kelet[anthropic]`, `kelet[openai]`, etc.) — if missing, `configure()` silently skips that library. `agentic_session()` is **required whenever you own the orchestration loop**. If a supported framework orchestrates for you, sessions are inferred automatically — no wrapper needed. See Sessions section above. `kelet.agent(name=...)` — use when: (a) multiple agents run in one session and need separate attribution, or (b) your framework doesn't expose agent names natively (pydantic-ai does; OpenAI/Anthropic/raw SDKs don't — Kelet can't infer it). Logfire users: `kelet.configure()` detects the existing `TracerProvider` — no conflict.
 
 Streaming: wrap the **entire** generator body (not the caller), including the final sentinel — trailing spans are silently lost otherwise:
 ```python
@@ -201,3 +213,4 @@ Feedback signals?
 | Node.js: `npm install kelet` only, missing OTEL peer deps | Import errors or no traces | Add `@opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http`. Python needs no peer deps. |
 | Next.js: missing `instrumentationHook: true` in `next.config.js` | `instrumentation.ts` exists but never runs, zero traces | Add `experimental: { instrumentationHook: true }` to `next.config.js`. **Silent.** |
 | Vercel AI SDK: missing `experimental_telemetry: { isEnabled: true }` per call | `configure()` succeeds, zero traces from AI SDK calls | Vercel AI SDK telemetry is off by default. Must opt in per call. **Silent.** |
+| DIY orchestration without `agentic_session()` | Sessions appear fragmented — each LLM call is a separate unlinked trace in Kelet | Required whenever you own the loop: Temporal, manual agent chaining, custom orchestrators, raw SDK calls. **Silent.** |
