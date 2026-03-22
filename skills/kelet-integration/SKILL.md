@@ -1,6 +1,10 @@
 ---
 name: kelet-integration
-description: Use when integrating Kelet into an AI application — setting up tracing, user feedback collection, and session correlation across Python, TypeScript/Node.js, Next.js, and React frontends. Triggers on requests to "add Kelet", "instrument my agent", "set up Kelet tracing", "add feedback collection", or "integrate with Kelet".
+description: >
+  ALWAYS use this skill when the user mentions Kelet in any context — integrating, setting up, adding tracing,
+  instrumenting their agent, or asking how Kelet works. Triggers on: "integrate Kelet", "set up Kelet",
+  "add Kelet", "instrument my agent with Kelet", "connect Kelet", "use Kelet", or any mention of Kelet
+  alongside their AI app. Do NOT attempt Kelet integration without invoking this skill first.
 license: CC-BY-4.0
 metadata:
   author: kelet-ai
