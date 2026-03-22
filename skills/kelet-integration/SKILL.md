@@ -70,33 +70,28 @@ Reason about failure modes, then propose specific signals — not a generic list
 Kelet clusters failure patterns across sessions — noisy or redundant signals dilute clustering quality. **Propose 3–5 signals per flow** (cap at 5, prioritized by specificity to the failure mode). For each: what it captures, how it manifests, what failure it reveals to Kelet's RCA engine.
 
 **Synthetic signals: generate a deeplink, not code.**
-After confirming coded signal selection with the developer, generate a deeplink for the platform's AI evaluator wizard:
-1. Compose `use_case` from Phase 0b (2–4 sentences: what the agent does, key failure modes, user interactions)
-2. Generate 3–5 ideas matching identified failure modes:
-   - `evaluator_type: "llm"` for semantic checks (hallucination, task completion, relevancy, role adherence)
-   - `evaluator_type: "code"` for structural checks (loop detection, tool failure rate, latency thresholds)
-   - Add `context` only when you have specific steering text for that evaluator
-3. Run this exact command to generate the URL (fill in `use_case` and `ideas` before running):
-   ```python
-   python3 -c "
-   import base64, json
-   payload = {
-       'use_case': 'REPLACE: 2-4 sentences from Phase 0b — what the agent does, key failure modes, user interactions',
-       'ideas': [
-           {'name': 'REPLACE', 'evaluator_type': 'llm', 'description': 'REPLACE'},
-           {'name': 'REPLACE', 'evaluator_type': 'code', 'description': 'REPLACE'},
-       ]
-   }
-   encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(',',':')).encode()).rstrip(b'=').decode()
-   print(f'https://console.kelet.ai/synthetics/setup?deeplink={encoded}')
-   "
-   ```
-   Copy the printed URL — that is the deeplink.
-4. Present to the developer:
-   > Click this link to set up AI-powered evaluators tailored to your agent:
-   > `https://console.kelet.ai/synthetics/setup?deeplink=<encoded>`
-   >
-   > This will generate evaluators for: [list idea names]. Click "Activate All" once you've reviewed them.
+After confirming coded signal selection with the developer, generate a deeplink for the platform's AI evaluator wizard. Fill in the payload and run:
+```python
+python3 -c "
+import base64, json
+payload = {
+    'use_case': '<agent use case>',
+    'ideas': [
+        {'name': '<name>', 'evaluator_type': 'llm', 'description': '<description>'},
+        {'name': '<name>', 'evaluator_type': 'code', 'description': '<description>'},
+    ]
+}
+encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(',',':')).encode()).rstrip(b'=').decode()
+print(f'https://console.kelet.ai/synthetics/setup?deeplink={encoded}')
+"
+```
+
+For each idea, decide the type: **is this check deterministic/measurable?** → `"code"`. **Is it semantic/qualitative?** → `"llm"`. Add `"context"` only when you need to steer the evaluator toward something specific.
+
+Present the printed URL to the developer:
+> Click this link to set up AI-powered evaluators tailored to your agent: `<printed URL>`
+>
+> This will generate evaluators for: [list idea names]. Click "Activate All" once you've reviewed them.
 
 Only write `source=SYNTHETIC` signal code if the developer explicitly asks AND the platform cannot implement it (explain why + ask to confirm).
 
