@@ -76,7 +76,22 @@ After confirming coded signal selection with the developer, generate a deeplink 
    - `evaluator_type: "llm"` for semantic checks (hallucination, task completion, relevancy, role adherence)
    - `evaluator_type: "code"` for structural checks (loop detection, tool failure rate, latency thresholds)
    - Add `context` only when you have specific steering text for that evaluator
-3. Base64url-encode the payload: `btoa(JSON.stringify({use_case, ideas})).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')`
+3. Run this exact command to generate the URL (fill in `use_case` and `ideas` before running):
+   ```python
+   python3 -c "
+   import base64, json
+   payload = {
+       'use_case': 'REPLACE: 2-4 sentences from Phase 0b — what the agent does, key failure modes, user interactions',
+       'ideas': [
+           {'name': 'REPLACE', 'evaluator_type': 'llm', 'description': 'REPLACE'},
+           {'name': 'REPLACE', 'evaluator_type': 'code', 'description': 'REPLACE'},
+       ]
+   }
+   encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(',',':')).encode()).rstrip(b'=').decode()
+   print(f'https://console.kelet.ai/synthetics/setup?deeplink={encoded}')
+   "
+   ```
+   Copy the printed URL — that is the deeplink.
 4. Present to the developer:
    > Click this link to set up AI-powered evaluators tailored to your agent:
    > `https://console.kelet.ai/synthetics/setup?deeplink=<encoded>`
