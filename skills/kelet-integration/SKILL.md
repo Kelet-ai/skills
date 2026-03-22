@@ -12,7 +12,7 @@ license: CC-BY-4.0
 metadata:
   author: kelet-ai
   url: https://kelet.ai
-  version: "1.1.1"
+  version: "1.2.0"
 ---
 
 # Kelet Integration
