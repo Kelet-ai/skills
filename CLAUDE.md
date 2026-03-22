@@ -36,6 +36,6 @@ Each skill is a self-contained directory under `skills/`. The directory name mus
 
 ## Kelet-Specific Rules
 
-- **Synthetic signals = platform responsibility.** Never generate `source=SYNTHETIC` in customer code by default. Point developers to `https://console.kelet.ai/synthetics`.
+- **Synthetic signals = platform responsibility.** Never generate `source=SYNTHETIC` in customer code by default. Instead, generate a deeplink after Phase 0c: base64url-encode `{"use_case": "<description from 0b>", "ideas": [...]}` and present `https://console.kelet.ai/synthetics/setup?deeplink=<encoded>` — the console generates tailored evaluator configs for the developer to review and activate.
 - **Two API key types:** secret (`KELET_API_KEY`, server-only) and publishable (`VITE_KELET_PUBLISHABLE_KEY`, frontend-safe). Never mix them.
 - **Package names:** `kelet` (Python + TypeScript), `@kelet-ai/feedback-ui` (React).

@@ -69,8 +69,21 @@ Reason about failure modes, then propose specific signals — not a generic list
 
 Kelet clusters failure patterns across sessions — noisy or redundant signals dilute clustering quality. **Propose 3–5 signals per flow** (cap at 5, prioritized by specificity to the failure mode). For each: what it captures, how it manifests, what failure it reveals to Kelet's RCA engine.
 
-**CRITICAL: Synthetic signals are the platform's responsibility.**
-If the developer asks about LLM-as-judge or automated quality metrics → point them to `https://console.kelet.ai/synthetics`. Kelet manages evaluators there on their behalf. Only write `source=SYNTHETIC` signal code if the developer explicitly asks AND the platform cannot implement it (explain why + ask to confirm).
+**Synthetic signals: generate a deeplink, not code.**
+After confirming coded signal selection with the developer, generate a deeplink for the platform's AI evaluator wizard:
+1. Compose `use_case` from Phase 0b (2–4 sentences: what the agent does, key failure modes, user interactions)
+2. Generate 3–5 ideas matching identified failure modes:
+   - `evaluator_type: "llm"` for semantic checks (hallucination, task completion, relevancy, role adherence)
+   - `evaluator_type: "code"` for structural checks (loop detection, tool failure rate, latency thresholds)
+   - Add `context` only when you have specific steering text for that evaluator
+3. Base64url-encode the payload: `btoa(JSON.stringify({use_case, ideas})).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')`
+4. Present to the developer:
+   > Click this link to set up AI-powered evaluators tailored to your agent:
+   > `https://console.kelet.ai/synthetics/setup?deeplink=<encoded>`
+   >
+   > This will generate evaluators for: [list idea names]. Click "Activate All" once you've reviewed them.
+
+Only write `source=SYNTHETIC` signal code if the developer explicitly asks AND the platform cannot implement it (explain why + ask to confirm).
 
 **Multi-select ask:**
 > "Here are the most valuable signals for your workflow. Select what to implement:"
@@ -80,7 +93,7 @@ If the developer asks about LLM-as-judge or automated quality metrics → point 
 > Implicit feedback: [ ] Edit tracking on [editable output] — "user corrected this"
 > Automated: [ ] Signal when [condition] — e.g., tool call fails, output rejected
 >
-> Platform synthetics (set up at console.kelet.ai/synthetics): [ ] LLM-as-judge for [quality concern]
+> Platform synthetics (deeplink generated after this step): [ ] LLM-as-judge for [quality concern]
 
 See [references/signals.md](references/signals.md) for signal kinds, sources, and when to use each.
 
@@ -182,7 +195,7 @@ Feedback signals?
 ├─► Explicit (votes)     ──► VoteFeedback / kelet.signal(kind=FEEDBACK, source=HUMAN)
 ├─► Implicit (edits)     ──► useFeedbackState (tag AI vs human updates with trigger names)
 ├─► Reducer-based state  ──► useFeedbackReducer (action.type = trigger name automatically)
-└─► Automated metrics    ──► Platform synthetics → console.kelet.ai/synthetics
+└─► Automated metrics    ──► Generate deeplink → console.kelet.ai/synthetics/setup
 ```
 
 ---
