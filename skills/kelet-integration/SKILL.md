@@ -1,10 +1,13 @@
 ---
 name: kelet-integration
 description: >
-  ALWAYS use this skill when the user mentions Kelet in any context — integrating, setting up, adding tracing,
-  instrumenting their agent, or asking how Kelet works. Triggers on: "integrate Kelet", "set up Kelet",
-  "add Kelet", "instrument my agent with Kelet", "connect Kelet", "use Kelet", or any mention of Kelet
-  alongside their AI app. Do NOT attempt Kelet integration without invoking this skill first.
+  Integrates Kelet into AI applications end-to-end: instruments agentic flows with OTEL tracing, maps session
+  boundaries, adds user feedback signals (VoteFeedback, edit tracking, coded behavioral hooks), generates
+  synthetic evaluator deeplinks, and verifies the integration. Kelet is an AI agent that performs Root Cause
+  Analysis on AI app failures — it ingests traces and signals, clusters failure patterns, and suggests fixes.
+  Use when the developer mentions Kelet or asks to integrate, set up, instrument, or add tracing/signals/feedback
+  to their AI app. Triggers on: "integrate Kelet", "set up Kelet", "add Kelet", "instrument my agent",
+  "connect Kelet", "use Kelet".
 license: CC-BY-4.0
 metadata:
   author: kelet-ai
@@ -18,11 +21,39 @@ Kelet is an AI agent that does Root Cause Analysis for AI app failures. It inges
 
 **Kelet never crashes your app.** All SDK errors — misconfigured keys, network failures, wrong session IDs, missing extras — are swallowed silently to ensure QoS. A misconfigured integration looks identical to a working one. The Common Mistakes section documents every known silent failure mode.
 
-**Always follow phases in order: 0a → 0b → 0c → 0d → 1 → implement.**
+---
+
+## Key Concepts
+
+**What the SDK does automatically:** Once `kelet.configure()` is called, popular AI frameworks are auto-instrumented via OTEL — tracing requires no further code.
+
+**What requires explicit integration:** session grouping (`agentic_session()`), user signals (VoteFeedback, `useFeedbackState`), and custom coded signals.
+
+**Session grouping:** Developers almost always already have conversation/request/thread IDs. Find what exists and reuse it — don't invent new session management. Verify the session identifier is propagated consistently end-to-end (client → server → `agentic_session()` → response header → VoteFeedback). If IDs conflict or are ambiguous, explicitly ask the developer before proceeding.
+
+**Explicit signals:** If the app already has feedback UI (thumbs up/down, ratings) — wire to it, don't replace it. If nothing exists, suggest adding VoteFeedback. Edit tracking (user modifying AI-generated content) is always worth capturing — it reveals "close but wrong."
+
+**Coded signals:** Find real hooks in the existing codebase — dismiss, accept, retry, undo, escalate. Don't propose signals abstractly. Verify with the developer that each event is specific to AI content (not a general UI action).
+
+**Synthetic signals:** Platform-run evaluators — either LLM-as-judge (semantic/quality) or heuristic (structural/metric). No app code required. Delivered via deeplink.
+
+---
+
+**If Kelet is already in the project's dependencies:** skip setup, focus on what the developer asked. Phase 0a and Phase V still apply.
+
+**Always follow phases in order: 0a → 0b → 0c → 0d → 1 → implement. After each phase, present your analysis summary to the developer and ask if it's correct before proceeding.**
 
 ---
 
 ## Phase 0a: Project Mapping (ALWAYS first)
+
+**Enter `/plan` mode** and map the codebase before asking or proposing anything:
+1. **Map every LLM call** — to understand the use case, flows, and failure modes (feeds into 0b/0c)
+2. **Find existing session tracking** — look for conversation IDs, request IDs, thread IDs, or any grouping mechanism. Wire it to `agentic_session()` rather than inventing new session management. Check that session identifiers are propagated consistently end-to-end. If there's a contradiction or ambiguity, **explicitly ask the developer** before proceeding.
+
+Start with dependency files to identify AI frameworks and libraries. If you spot other repos/services that are part of the agentic flow (e.g., a frontend, another agent service) — not unrelated infra — tell the developer to run this skill there too.
+
+Produce an **Integration Map** and confirm with the developer before writing code.
 
 Infer from existing files (README, CLAUDE.md, entrypoints, dependency files, `.env`) before asking. Only ask what you can't determine.
 
@@ -69,12 +100,29 @@ Outputs from this phase feed directly into signal selection in 0c — each ident
 
 ## Phase 0c: Signal Brainstorming
 
-Reason about failure modes, then propose specific signals — not a generic list.
+Reason about failure modes, then propose signals across three layers — propose all that apply:
 
-Kelet clusters failure patterns across sessions — noisy or redundant signals dilute clustering quality. **Propose 3–5 signals per flow** (cap at 5, prioritized by specificity to the failure mode). For each: what it captures, how it manifests, what failure it reveals to Kelet's RCA engine.
+**1. Explicit signals** (highest value — direct user expression)
+Look at the UX from 0b. Find every place the user interacts with AI-generated content.
+- **Feedback already exists** (thumbs up/down, rating, feedback text)? Wire `kelet.signal()` to it — don't replace it.
+- **No feedback mechanism?** Suggest adding VoteFeedback and explain what it unlocks for RCA.
+- **Edit tracking**: if the user can modify AI-generated content, tracking those edits is highly valuable (accepted but corrected = "close but wrong"). Implement appropriately for the stack.
 
-**Synthetic signals: generate a deeplink, not code.**
-After confirming coded signal selection with the developer, generate a deeplink for the platform's AI evaluator wizard. Fill in the payload and run:
+**2. Coded signals** (implicit behavioral events in the app)
+Find events that imply the AI got it right or wrong — dismiss, accept, retry, undo, escalate, rephrase, skip. Wire `kelet.signal()` to the exact locations. When proposing a signal, verify with the developer that the event is specific to AI content (not a general UI action).
+
+**3. Synthetic signals** (platform-run, no app code)
+Based on failure modes from 0b, propose LLM-as-judge evaluators (semantic/quality) and heuristic evaluators (structural/metric). Delivered via deeplink — developer clicks once to activate.
+
+**Then ask (multi-select):**
+> Tracing (always included): [ ] flow X  [ ] flow Y
+> Explicit: [ ] VoteFeedback at [location]  [ ] Edit tracking on [output]
+> Coded: [ ] Signal when [behavioral event]
+> Synthetic: [ ] [evaluator name] — deeplink generated after selection
+
+Ask if any need steering to be more accurate (e.g., "does this event apply only to AI content?").
+
+**You don't need to implement synthetics on your own — let Kelet do that for you.** After the developer selects synthetic evaluators, generate a deeplink for the platform's AI evaluator wizard. Fill in the payload and run:
 ```python
 python3 -c "
 import base64, json
@@ -98,16 +146,6 @@ Present the printed URL to the developer:
 > This will generate evaluators for: [list idea names]. Click "Activate All" once you've reviewed them.
 
 Only write `source=SYNTHETIC` signal code if the developer explicitly asks AND the platform cannot implement it (explain why + ask to confirm).
-
-**Multi-select ask:**
-> "Here are the most valuable signals for your workflow. Select what to implement:"
->
-> Tracing (always included): [ ] flow X  [ ] flow Y
-> Explicit feedback: [ ] VoteFeedback at [location] — "was this helpful?"
-> Implicit feedback: [ ] Edit tracking on [editable output] — "user corrected this"
-> Automated: [ ] Signal when [condition] — e.g., tool call fails, output rejected
->
-> Platform synthetics (deeplink generated after this step): [ ] LLM-as-judge for [quality concern]
 
 See [references/signals.md](references/signals.md) for signal kinds, sources, and when to use each.
 
@@ -223,6 +261,18 @@ Feedback signals?
 5. **Instrument frontend** — `KeletProvider` at root, nested per flow if multi-project
 6. **Connect feedback** — VoteFeedback + session ID propagation if user-facing
 7. **Verify** — type check, confirm env vars set, open Kelet console and confirm traces appear
+
+---
+
+## Phase V: Post-Implementation Verification
+
+Key things to verify for a Kelet integration:
+- Every agentic entry point is covered by `agentic_session()` or a supported framework — missing one = silent fragmented traces
+- Session ID is consistent end-to-end: client → server → `agentic_session()` → response header → VoteFeedback
+- `kelet.configure()` is called once at startup, not per-request
+- Secret key is server-only — never in the frontend bundle
+- Check Common Mistakes for any stack-specific gotchas that apply
+- Smoke test: trigger an LLM call, then tell the developer to open the Kelet console and verify sessions are appearing. Note it may take a few minutes for sessions to be fully ingested.
 
 ---
 
