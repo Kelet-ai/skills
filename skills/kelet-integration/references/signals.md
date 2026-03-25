@@ -45,4 +45,26 @@ For each proposal, state: what it captures → how it manifests → what failure
 - `kind` (required)
 - `source` (required)
 - `session_id` OR `trace_id` (at least one required — auto-resolved from `agentic_session` context if not passed explicitly)
+- `trigger_name` (optional) — identifies what the signal represents; see naming conventions below
 - `score` (0.0–1.0 if provided)
+- `value` (optional) — text content: feedback text, edit diff, reasoning, etc.
+- `confidence` (0.0–1.0 if provided)
+- `metadata` (optional) — arbitrary dict for extra context
+
+---
+
+## Naming Conventions
+
+Use `trigger_name` to identify what a signal represents. Follow `source-action` format: lowercase, hyphenated, two-part names that reflect where the signal came from and what happened.
+
+| Good | Bad | Why |
+|---|---|---|
+| `user-vote` | `good-response` | Name the source+action, not the assumed quality |
+| `user-edit` | `edit` | Include source to distinguish from system edits |
+| `user-retry` | `retry_button_clicked` | Concise; no UI implementation details |
+| `system-timeout` | `timeout_error_occurred` | Describe the signal, not the error log |
+
+**Rules:**
+- Don't encode assumed quality: `user-thumbs-down`, not `bad-response`
+- Consistent across flows — Kelet clusters by `trigger_name`; inconsistent names fragment analytics
+- Same behavior in different projects → same name

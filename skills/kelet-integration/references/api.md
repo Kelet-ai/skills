@@ -15,7 +15,7 @@ Functions (all in `kelet` namespace):
 - `kelet.configure(*, api_key=None, project=None, base_url=None)` — call once at startup
 - `kelet.agentic_session(*, session_id, user_id=None, project=None)` — async/sync context manager AND decorator
 - `kelet.agent(*, name)` — context manager; names an agent within a session for readable multi-agent traces
-- `async kelet.signal(kind, source, *, session_id=None, ...)` — submit a signal; auto-resolves session from context
+- `async kelet.signal(kind, source, *, session_id=None, trace_id=None, trigger_name=None, score=None, value=None, confidence=None, metadata=None, timestamp=None)` — submit a signal; auto-resolves session from context
 - `kelet.get_session_id()` — get current session ID from context
 - `kelet.create_kelet_processor()` — for manual OTEL setup (e.g. `logfire.configure(additional_span_processors=[kelet.create_kelet_processor()])`)
 
@@ -31,7 +31,7 @@ Node.js only (not browser-compatible). Inside the callback, `signal()` auto-reso
 
 Other functions:
 - `configure({ apiKey, project, apiUrl })` — call once at startup
-- `signal({ kind, source, sessionId?, traceId?, ... })` — returns Promise<void>
+- `signal({ kind, source, sessionId?, traceId?, triggerName?, score?, value?, confidence?, metadata?, timestamp? })` — returns Promise<void>
 - `getSessionId()`, `getUserId()`, `getTraceId()` — read from current context
 
 ## Next.js

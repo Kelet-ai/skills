@@ -21,6 +21,8 @@ Kelet is an AI agent that does Root Cause Analysis for AI app failures. It inges
 
 **Kelet never crashes your app.** All SDK errors — misconfigured keys, network failures, wrong session IDs, missing extras — are swallowed silently to ensure QoS. A misconfigured integration looks identical to a working one. The Common Mistakes section documents every known silent failure mode.
 
+**What Kelet is not:** Not a prompt management tool (no versioning or playground — use a dedicated prompt management platform or manage prompts as code). Not a log aggregator (Kelet doesn't store raw logs — use a logging solution for that).
+
 ---
 
 ## Key Concepts
@@ -42,6 +44,15 @@ Kelet is an AI agent that does Root Cause Analysis for AI app failures. It inges
 **If Kelet is already in the project's dependencies:** skip setup, focus on what the developer asked. Phase 0a and Phase V still apply.
 
 **Always follow phases in order: 0a → 0b → 0c → 0d → 1 → implement. After each phase, present your analysis summary to the developer and ask if it's correct before proceeding.**
+
+---
+
+## Before You Implement
+
+Always fetch current Kelet documentation before writing any integration code. Kelet updates frequently — trust the docs over your training data.
+
+1. **Find the right page**: Fetch `https://kelet.ai/docs/llms.txt` to get a structured index of all docs pages
+2. **Read the page**: Append `.md` to any docs URL for clean markdown — e.g., `https://kelet.ai/docs/quickstart.md`
 
 ---
 
