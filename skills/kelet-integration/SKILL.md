@@ -370,9 +370,9 @@ User-facing with React?
 └─► No  ──► Server-side only
 
 Feedback signals?
-├─► Explicit (votes)     ──► VoteFeedback / kelet.signal(kind=FEEDBACK, source=HUMAN)
-├─► Implicit (edits)     ──► useFeedbackState (tag AI vs human updates with trigger names)
-├─► Reducer-based state  ──► useFeedbackReducer (action.type = trigger name automatically)
+├─► Explicit (votes)            ──► VoteFeedback / kelet.signal(kind=FEEDBACK, source=HUMAN)
+├─► Implicit (edits)            ──► useFeedbackState (tag AI vs human updates with trigger names)
+├─► Reducer-based state         ──► useFeedbackReducer (action.type = trigger name automatically)
 └─► Synthetic signal evaluators ──► Generate deeplink → console.kelet.ai/synthetics/setup
 ```
 
