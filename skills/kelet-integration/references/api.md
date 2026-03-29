@@ -17,8 +17,10 @@ Functions (all in `kelet` namespace):
 - `kelet.agentic_session(*, session_id, user_id=None, project=None)` — async/sync context manager AND decorator
 - `kelet.agent(*, name)` — context manager; names an agent within a session for readable multi-agent traces
 -
+
 `async kelet.signal(kind, source, *, session_id=None, trace_id=None, trigger_name=None, score=None, value=None, confidence=None, metadata=None, timestamp=None)` —
 submit a signal; auto-resolves session from context
+
 - `kelet.get_session_id()` — get current session ID from context
 - `kelet.create_kelet_processor()` — for manual OTEL setup (e.g.
   `logfire.configure(additional_span_processors=[kelet.create_kelet_processor()])`)
@@ -52,12 +54,27 @@ Use `KeletExporter` in `instrumentation.ts` via `@vercel/otel`:
 
 - `KeletProvider({ apiKey?, project, baseUrl? })` — `apiKey` optional if a parent provider already set it
 - `VoteFeedback.Root({ session_id, onFeedback? })` — compound component root
-- `VoteFeedback.UpvoteButton`, `VoteFeedback.DownvoteButton`, `VoteFeedback.Popover`, `VoteFeedback.Textarea`,
-  `VoteFeedback.SubmitButton`
+- `VoteFeedback.UpvoteButton` / `VoteFeedback.DownvoteButton` — render their OWN `<button>` element; children render
+  inside it. Use `asChild` prop (Radix-style) to merge handlers onto your own element via cloneElement. NEVER return a
+  `<button>` from a render prop without `asChild` — creates invalid nested buttons that silently corrupt HMR.
+  ✓ `<VoteFeedback.UpvoteButton><svg/></VoteFeedback.UpvoteButton>` (direct children)
+  ✓
+  `<VoteFeedback.UpvoteButton asChild>{({ isSelected }) => <button className={...}>👍</button>}</VoteFeedback.UpvoteButton>` (
+  asChild)
+  ✗ `<VoteFeedback.UpvoteButton>{({ isSelected }) => <button>👍</button>}</VoteFeedback.UpvoteButton>` (nested buttons)
+- `VoteFeedback.Popover` — fully headless; renders as a plain `role="dialog"` div with NO positioning. To float above
+  buttons: (1) wrap `VoteFeedback.Root` in a `position: relative` container, (2) give Popover
+  `position: absolute; bottom: calc(100% + 8px)`, (3) ensure no ancestor has `overflow: hidden` — it clips the
+  popover. Click-outside-to-close is NOT implemented; do NOT build a workaround (library will add it natively).
+- `VoteFeedback.Textarea`, `VoteFeedback.SubmitButton`
 - `useFeedbackState<T>(initialState, session_id, options?)` — drop-in for `useState`; tracks edits automatically. Second
   arg to each `setState` call sets trigger name: `setState(value, "ai_generation")` vs `setState(value, "manual_edit")`
-- `useFeedbackReducer<S, A>(reducer, initialState, session_id)` — drop-in for `useReducer`; action `type` auto-becomes
-  trigger name
+- `useKeletSignal()` — returns a `sendSignal(params)` function for sending signals directly from React event handlers.
+  Use for coded signals (abandon, copy, accept, rephrase) that aren't tied to component state. Must be called inside
+  a `KeletProvider`.
+  params: `{ session_id, kind, source, trigger_name?, score?, value?, metadata? }`
+  Example:
+  `const sendSignal = useKeletSignal(); sendSignal({ session_id, kind: 'FEEDBACK', source: 'HUMAN', trigger_name: 'user-abandon', score: 0.0 });`
 
 ## Env Vars
 

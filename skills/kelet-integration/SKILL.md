@@ -119,6 +119,10 @@ can't determine.
 4. Stack: server (Python/Node.js/Next.js) + LLM framework + React?
 5. Config pattern: `.env` / `.envrc` / YAML / K8s secrets?
    > Writing keys to the wrong file is a silent failure — Kelet appears uninstrumented with no error.
+6. What is the exact Kelet project name for this flow?
+   > Do NOT guess from the repo or app name — they differ. Projects are created from the **top-nav project switcher**
+   > in console.kelet.ai (click the project name → New Project). Ask explicitly and wait for the developer's answer.
+   > Mismatched project name is a silent failure — data captured under the wrong project with no error.
 
 **Produce a Project Map before proceeding:**
 
@@ -290,6 +294,16 @@ key or don't know what it is, direct them to create one:
 
 Do not proceed until both required keys are in hand (or explicitly deferred with a placeholder).
 
+**Project name workflow:**
+
+1. Suggest a name based on the app (e.g. "docs-ai" → "docs_ai_prod").
+2. Instruct: "Create this project in the Kelet console — click the project name in the **top-nav** at
+   console.kelet.ai, then 'New Project'. Use the name `<suggested_name>`."
+3. Ask (`AskUserQuestion`): "Have you created the project? What is the exact name you used?" — wait for their answer.
+4. If not created or using default: omit `project=` entirely — Kelet routes to the default project automatically.
+5. Once confirmed: write to env file as `KELET_PROJECT` (server) and `PUBLIC_KELET_PROJECT` / `VITE_KELET_PROJECT`
+   (frontend). Read in code via env var — **never hardcode the project name string in source files.**
+
 Once received, write to the correct file based on the detected config pattern:
 
 - `.env` → `KEY=value`
@@ -367,11 +381,12 @@ captured but unlinked from the trace.**)
 - **`useFeedbackState`**: drop-in for `useState`. Each `setState` call accepts a trigger name as second arg — tag
   AI-generated updates `"ai_generation"` and user edits `"manual_refinement"`. Without trigger names, all state changes
   look identical and Kelet can't distinguish "user accepted AI output" from "user corrected it."
-- **`useFeedbackReducer`**: drop-in for `useReducer`. Action `type` fields automatically become trigger names — zero
-  extra instrumentation for reducer-based state.
+- **`useKeletSignal()`**: returns a `sendSignal(params)` function for sending signals directly from React event
+  handlers — abandon, rephrase, accept, copy. Must be inside `KeletProvider`. Preferred over a backend endpoint for
+  browser-observable events (no round-trip needed).
 
 **Which to use:** Explicit rating of AI response → `VoteFeedback`. Editable AI output → `useFeedbackState` with trigger
-names. Complex state with action types → `useFeedbackReducer`.
+names. Coded behavioral events (abandon, retry, copy) → `useKeletSignal()`.
 
 ---
 
@@ -396,7 +411,7 @@ User-facing with React?
 Feedback signals?
 ├─► Explicit (votes)            ──► VoteFeedback / kelet.signal(kind=FEEDBACK, source=HUMAN)
 ├─► Implicit (edits)            ──► useFeedbackState (tag AI vs human updates with trigger names)
-├─► Reducer-based state         ──► useFeedbackReducer (action.type = trigger name automatically)
+├─► Coded signals from React    ──► useKeletSignal() inside KeletProvider
 └─► Synthetic signal evaluators ──► Generate deeplink → console.kelet.ai/synthetics/setup
 ```
 
@@ -428,6 +443,12 @@ Key things to verify for a Kelet integration:
 - Check Common Mistakes for any stack-specific gotchas that apply
 - Smoke test: trigger an LLM call, then tell the developer to open the Kelet console and verify sessions are appearing.
   Note it may take a few minutes for sessions to be fully ingested.
+- If VoteFeedback was added: use the available browser tool (chrome devtools MCP or browsermcp) to take a screenshot
+  of the feedback bar. Verify it looks on-brand and matches the app's design language. Also confirm:
+  `document.querySelectorAll('button button').length === 0` (no nested buttons). Do not rely on "build passes" alone —
+  headless UI requires visual verification.
+- After ANY frontend changes: screenshot existing pages (not just the new feature) to verify they still render
+  correctly. tsconfig overrides or invalid HTML can silently break unrelated pages — build passing ≠ pages unaffected.
 
 ---
 
@@ -446,3 +467,11 @@ Key things to verify for a Kelet integration:
 | Next.js: missing `instrumentationHook: true` in `next.config.js`              | `instrumentation.ts` exists but never runs, zero traces                          | Add `experimental: { instrumentationHook: true }` to `next.config.js`. **Silent.**                                         |
 | Vercel AI SDK: missing `experimental_telemetry: { isEnabled: true }` per call | `configure()` succeeds, zero traces from AI SDK calls                            | Vercel AI SDK telemetry is off by default. Must opt in per call. **Silent.**                                               |
 | DIY orchestration without `agentic_session()`                                 | Sessions appear fragmented — each LLM call is a separate unlinked trace in Kelet | Required whenever you own the loop: Temporal, manual agent chaining, custom orchestrators, raw SDK calls. **Silent.**      |
+| VoteFeedback: `<button>` returned from render prop without `asChild`          | Invalid nested buttons — silently corrupts HMR, may crash dev server             | Use `asChild` prop or pass content as direct children; never wrap in another `<button>`.                                   |
+| VoteFeedback.Popover: no CSS positioning context                              | Popover renders in document flow — invisible or in wrong position                | Parent needs `position: relative`; Popover needs `position: absolute`.                                                     |
+| Panel `overflow: hidden` containing VoteFeedback.Popover                      | Popover clipped / invisible even with correct position CSS                       | Set overflow only on the scroll container, not the panel wrapping VoteFeedback.                                            |
+| Astro: `"jsxImportSource": "react"` in tsconfig.json                          | Astro JSX compilation silently overridden — pages render as raw HTML             | Remove from tsconfig; `@astrojs/react` handles JSX automatically.                                                          |
+| `kelet[*]` as pip extra                                                       | Package doesn't need extras                                                      | Just `kelet` instruments pydantic-ai/langraph/etc. automatically. No extra needed.                                         |
+| Project name hardcoded in source (not env var)                                | Changing projects requires a code change                                         | Always use `KELET_PROJECT` env var; read via `os.environ` or Pydantic Settings.                                            |
+| Guessing project name from repo/app name                                      | `configure()` silently routes to wrong/nonexistent project                       | Always ask for exact project name; instruct developer to create from console top-nav first.                                |
+| Not verifying existing pages after frontend changes                           | Unrelated pages break silently — only caught when user reports                   | After any frontend change, screenshot existing pages to confirm they still render correctly.                               |
