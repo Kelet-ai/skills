@@ -62,6 +62,9 @@ V still apply.
 to the developer and wait for confirmation before continuing. DO NOT chain phases silently. DO NOT write a full plan
 without these checkpoints.**
 
+**Plan mode:** This skill runs inside `/plan` mode. Present the full implementation plan and call `ExitPlanMode` for
+approval BEFORE writing any code or editing any files. Never start implementation without explicit developer approval.
+
 ---
 
 ## Before You Implement
@@ -174,17 +177,22 @@ Based on failure modes from 0b, propose LLM-as-judge synthetic signal evaluators
 
 **Ground every synthetic signal evaluator in observed behavior.** Only propose synthetic signal evaluators for things the agent actually does — don't invent features. If you're unsure whether the agent produces a certain output (e.g. citations, confidence scores, structured data), ask the developer before proposing a synthetic signal evaluator that depends on it. For `code` type: the check must be fully deterministic from the raw output (e.g. response length, JSON validity, presence of a known token). If you're reaching for any natural language understanding, it's `llm`, not `code`.
 
-**STOP — present signals to the developer and ask them to select (multi-select).** This is a REQUIRED interactive
-checkpoint. Do not proceed to Phase 0d or implementation until the developer has chosen:
-> Tracing (always included): [ ] flow X  [ ] flow Y
-> Explicit: [ ] VoteFeedback at [location]  [ ] Edit tracking on [output]
-> Coded: [ ] Signal when [behavioral event]
-> Synthetic: [ ] [synthetic signal evaluator name]
+**STOP — this is a REQUIRED interactive checkpoint.** Use `AskUserQuestion` with `multiSelect: true` — two questions:
+1. One for explicit + coded signals (options = each proposed signal)
+2. One for synthetic evaluators (options = each proposed evaluator)
 
-Ask if any need steering to be more accurate (e.g., "does this event apply only to AI content?"). Wait for their
-response before continuing.
+Ask if any coded signals need steering (e.g., "does this event apply only to AI content?") and wait for their response.
 
-**You don't need to implement synthetics on your own — let Kelet do that for you.** Generate the synthetic signal evaluator deeplink **immediately when proposing them** — don't wait for the developer to select first. They need to act on it themselves (click the link, review, activate) and can't do that if you hold it until after implementation. Generate it inline in Phase 0c: Fill in the payload and run:
+**You don't need to implement synthetics on your own — let Kelet do that for you.** After the developer has selected
+which synthetic evaluators they want, generate the deeplink scoped to exactly those evaluators and present it as a bold
+standalone action item:
+
+> **Action required → click this link to activate your synthetic evaluators:**
+> `https://console.kelet.ai/synthetics/setup?deeplink=<encoded>`
+>
+> This will generate evaluators for: [list selected names]. Click "Activate All" once you've reviewed them.
+
+Generate the deeplink like this — include only the evaluators the developer selected:
 
 ```python
 python3 -c "
@@ -201,12 +209,11 @@ print(f'https://console.kelet.ai/synthetics/setup?deeplink={encoded}')
 "
 ```
 
-For each idea, decide the type: **is this check deterministic/measurable?** → `"code"`. **Is it semantic/qualitative?** → `"llm"`. Add `"context"` only when you need to steer the synthetic signal evaluator toward something specific.
+For each idea, decide the type: **is this check deterministic/measurable?** → `"code"`. **Is it semantic/qualitative?**
+→ `"llm"`. Add `"context"` only when you need to steer the evaluator toward something specific.
 
-Present the printed URL to the developer:
-> Click this link to set up synthetic signal evaluators tailored to your agent: `<printed URL>`
->
-> This will generate synthetic signal evaluators for: [list names]. Click "Activate All" once you've reviewed them.
+After presenting the link, use `AskUserQuestion` to confirm the developer has clicked it and activated the evaluators
+before proceeding to Phase 0d. Do NOT proceed until confirmed.
 
 Only write `source=SYNTHETIC` signal code if the developer explicitly asks AND the platform cannot implement it (explain
 why + ask to confirm).
@@ -262,9 +269,12 @@ Two key types — never mix them:
 - **Publishable key** (`VITE_KELET_PUBLISHABLE_KEY` / `NEXT_PUBLIC_KELET_PUBLISHABLE_KEY`): frontend-safe. Used in
   `KeletProvider` for VoteFeedback widget.
 
-**Ask for API keys during planning** (before presenting the final plan / calling ExitPlanMode). Implementation is
-blocked without them, and the developer may need time to generate or locate them. Don't wait until implementation
-begins.
+**Ask for API keys during planning** (before presenting the final plan / calling ExitPlanMode). Use `AskUserQuestion`
+(with an "I'll paste it in Other" option) to collect each key interactively. If the developer says they don't have a
+key or don't know what it is, direct them to create one:
+> Go to **https://console.kelet.ai/api-keys** to create your key, then paste it here.
+
+Do not proceed until both required keys are in hand (or explicitly deferred with a placeholder).
 
 Once received, write to the correct file based on the detected config pattern:
 
