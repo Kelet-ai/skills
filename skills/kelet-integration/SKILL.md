@@ -51,7 +51,8 @@ capturing — it reveals "close but wrong."
 **Coded signals:** Find real hooks in the existing codebase — dismiss, accept, retry, undo, escalate. Don't propose
 signals abstractly. Verify with the developer that each event is specific to AI content (not a general UI action).
 
-**Synthetic signals:** Platform-run synthetic signal evaluators — either LLM-as-judge (semantic/quality) or heuristic (structural/metric). No app code required. Delivered via deeplink.
+**Synthetic signals:** Platform-run synthetic signal evaluators — either LLM-as-judge (semantic/quality) or heuristic (
+structural/metric). No app code required. Delivered via deeplink.
 
 ---
 
@@ -173,11 +174,18 @@ Find events that imply the AI got it right or wrong — dismiss, accept, retry, 
 to AI content (not a general UI action).
 
 **3. Synthetic signals** (platform-run, no app code)
-Based on failure modes from 0b, propose LLM-as-judge synthetic signal evaluators (semantic/quality) and heuristic synthetic signal evaluators (structural/metric). Delivered via deeplink — developer clicks once to activate.
+Based on failure modes from 0b, propose LLM-as-judge synthetic signal evaluators (semantic/quality) and heuristic
+synthetic signal evaluators (structural/metric). Delivered LATER (after user approval) via deeplink — developer clicks
+once to activate.
 
-**Ground every synthetic signal evaluator in observed behavior.** Only propose synthetic signal evaluators for things the agent actually does — don't invent features. If you're unsure whether the agent produces a certain output (e.g. citations, confidence scores, structured data), ask the developer before proposing a synthetic signal evaluator that depends on it. For `code` type: the check must be fully deterministic from the raw output (e.g. response length, JSON validity, presence of a known token). If you're reaching for any natural language understanding, it's `llm`, not `code`.
+**Ground every synthetic signal evaluator in observed behavior.** Only propose synthetic signal evaluators for things
+the agent actually does — don't invent features. If you're unsure whether the agent produces a certain output (e.g.
+citations, confidence scores, structured data), ask the developer before proposing a synthetic signal evaluator that
+depends on it. For `code` type: the check must be fully deterministic from the raw output (e.g. response length, JSON
+validity, presence of a known token). If you're reaching for any natural language understanding, it's `llm`, not `code`.
 
 **STOP — this is a REQUIRED interactive checkpoint.** Use `AskUserQuestion` with `multiSelect: true` — two questions:
+
 1. One for explicit + coded signals (options = each proposed signal)
 2. One for synthetic evaluators (options = each proposed evaluator)
 
@@ -195,8 +203,10 @@ standalone action item:
 Generate the deeplink like this — include only the evaluators the developer selected:
 
 ```python
-python3 -c "
+python3 - c
+"
 import base64, json
+
 payload = {
     'use_case': '<agent use case>',
     'ideas': [
@@ -204,10 +214,14 @@ payload = {
         {'name': '<name>', 'evaluator_type': 'code', 'description': '<description>'},
     ]
 }
-encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(',',':')).encode()).rstrip(b'=').decode()
+encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(',', ':')).encode()).rstrip(b'=').decode()
 print(f'https://console.kelet.ai/synthetics/setup?deeplink={encoded}')
 "
 ```
+
+ONLY create and send the link AFTER the developer has selected which evaluators they want. Do NOT generate or present
+the link before they make their selection — that would be confusing and overwhelming. The link should reflect their
+choices, not all possible ideas!
 
 For each idea, decide the type: **is this check deterministic/measurable?** → `"code"`. **Is it semantic/qualitative?**
 → `"llm"`. Add `"context"` only when you need to steer the evaluator toward something specific.
