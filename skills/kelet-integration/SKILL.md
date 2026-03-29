@@ -51,8 +51,11 @@ Kelet is an AI agent that does Root Cause Analysis for AI app failures. It inges
 
 Always fetch current Kelet documentation before writing any integration code. Kelet updates frequently — trust the docs over your training data.
 
-1. **Find the right page**: Fetch `https://kelet.ai/docs/llms.txt` to get a structured index of all docs pages
-2. **Read the page**: Append `.md` to any docs URL for clean markdown — e.g., `https://kelet.ai/docs/quickstart.md`
+1. **Ask the docs AI (preferred)**: `GET https://docs-ai.kelet.ai/chat?q=<your+question>` — returns a focused plain-text answer from live docs. Ask before writing code, e.g.:
+   - `?q=how+to+configure+kelet+in+python`
+   - `?q=agenticSession+typescript+usage`
+   - `?q=VoteFeedback+session+id+propagation`
+2. **Browse the index (fallback)**: If the AI answer is insufficient, fetch `https://kelet.ai/docs/llms.txt` for a structured index, then append `.md` to any docs URL for clean markdown — e.g., `https://kelet.ai/docs/getting-started/quickstart.md`
 
 ---
 
