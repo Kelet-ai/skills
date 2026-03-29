@@ -3,7 +3,7 @@ name: kelet-integration
 description: >
   Integrates Kelet into AI applications end-to-end: instruments agentic flows with OTEL tracing, maps session
   boundaries, adds user feedback signals (VoteFeedback, edit tracking, coded behavioral hooks), generates
-  synthetic evaluator deeplinks, and verifies the integration. Kelet is an AI agent that performs Root Cause
+  synthetic signal evaluator deeplinks, and verifies the integration. Kelet is an AI agent that performs Root Cause
   Analysis on AI app failures — it ingests traces and signals, clusters failure patterns, and suggests fixes.
   Use when the developer mentions Kelet or asks to integrate, set up, instrument, or add tracing/signals/feedback
   to their AI app. Triggers on: "integrate Kelet", "set up Kelet", "add Kelet", "instrument my agent",
@@ -51,8 +51,7 @@ capturing — it reveals "close but wrong."
 **Coded signals:** Find real hooks in the existing codebase — dismiss, accept, retry, undo, escalate. Don't propose
 signals abstractly. Verify with the developer that each event is specific to AI content (not a general UI action).
 
-**Synthetic signals:** Platform-run evaluators — either LLM-as-judge (semantic/quality) or heuristic (
-structural/metric). No app code required. Delivered via deeplink.
+**Synthetic signals:** Platform-run synthetic signal evaluators — either LLM-as-judge (semantic/quality) or heuristic (structural/metric). No app code required. Delivered via deeplink.
 
 ---
 
@@ -171,31 +170,25 @@ Find events that imply the AI got it right or wrong — dismiss, accept, retry, 
 to AI content (not a general UI action).
 
 **3. Synthetic signals** (platform-run, no app code)
-Based on failure modes from 0b, propose LLM-as-judge evaluators (semantic/quality) and heuristic evaluators (
-structural/metric). Delivered via deeplink — developer clicks once to activate.
+Based on failure modes from 0b, propose LLM-as-judge synthetic signal evaluators (semantic/quality) and heuristic synthetic signal evaluators (structural/metric). Delivered via deeplink — developer clicks once to activate.
 
-**Ground every evaluator in observed behavior.** Only propose evaluators for things the agent actually does — don't invent features. If you're unsure whether the agent produces a certain output (e.g. citations, confidence scores, structured data), ask the developer before proposing an evaluator that depends on it. For `code` type: the check must be fully deterministic from the raw output (e.g. response length, JSON validity, presence of a known token). If you're reaching for any natural language understanding, it's `llm`, not `code`.
+**Ground every synthetic signal evaluator in observed behavior.** Only propose synthetic signal evaluators for things the agent actually does — don't invent features. If you're unsure whether the agent produces a certain output (e.g. citations, confidence scores, structured data), ask the developer before proposing a synthetic signal evaluator that depends on it. For `code` type: the check must be fully deterministic from the raw output (e.g. response length, JSON validity, presence of a known token). If you're reaching for any natural language understanding, it's `llm`, not `code`.
 
 **STOP — present signals to the developer and ask them to select (multi-select).** This is a REQUIRED interactive
 checkpoint. Do not proceed to Phase 0d or implementation until the developer has chosen:
 > Tracing (always included): [ ] flow X  [ ] flow Y
 > Explicit: [ ] VoteFeedback at [location]  [ ] Edit tracking on [output]
 > Coded: [ ] Signal when [behavioral event]
-> Synthetic: [ ] [evaluator name]
+> Synthetic: [ ] [synthetic signal evaluator name]
 
 Ask if any need steering to be more accurate (e.g., "does this event apply only to AI content?"). Wait for their
 response before continuing.
 
-**You don't need to implement synthetics on your own — let Kelet do that for you.** Generate the synthetics deeplink *
-*immediately when proposing them** — don't wait for the developer to select first. They need to act on it themselves (
-click the link, review, activate) and can't do that if you hold it until after implementation. Generate it inline in
-Phase 0c: Fill in the payload and run:
+**You don't need to implement synthetics on your own — let Kelet do that for you.** Generate the synthetic signal evaluator deeplink **immediately when proposing them** — don't wait for the developer to select first. They need to act on it themselves (click the link, review, activate) and can't do that if you hold it until after implementation. Generate it inline in Phase 0c: Fill in the payload and run:
 
 ```python
-python3 - c
-"
+python3 -c "
 import base64, json
-
 payload = {
     'use_case': '<agent use case>',
     'ideas': [
@@ -203,18 +196,17 @@ payload = {
         {'name': '<name>', 'evaluator_type': 'code', 'description': '<description>'},
     ]
 }
-encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(',', ':')).encode()).rstrip(b'=').decode()
+encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(',',':')).encode()).rstrip(b'=').decode()
 print(f'https://console.kelet.ai/synthetics/setup?deeplink={encoded}')
 "
 ```
 
-For each idea, decide the type: **is this check deterministic/measurable?** → `"code"`. **Is it semantic/qualitative?
-** → `"llm"`. Add `"context"` only when you need to steer the evaluator toward something specific.
+For each idea, decide the type: **is this check deterministic/measurable?** → `"code"`. **Is it semantic/qualitative?** → `"llm"`. Add `"context"` only when you need to steer the synthetic signal evaluator toward something specific.
 
 Present the printed URL to the developer:
-> Click this link to set up AI-powered evaluators tailored to your agent: `<printed URL>`
+> Click this link to set up synthetic signal evaluators tailored to your agent: `<printed URL>`
 >
-> This will generate evaluators for: [list idea names]. Click "Activate All" once you've reviewed them.
+> This will generate synthetic signal evaluators for: [list names]. Click "Activate All" once you've reviewed them.
 
 Only write `source=SYNTHETIC` signal code if the developer explicitly asks AND the platform cannot implement it (explain
 why + ask to confirm).
@@ -381,7 +373,7 @@ Feedback signals?
 ├─► Explicit (votes)     ──► VoteFeedback / kelet.signal(kind=FEEDBACK, source=HUMAN)
 ├─► Implicit (edits)     ──► useFeedbackState (tag AI vs human updates with trigger names)
 ├─► Reducer-based state  ──► useFeedbackReducer (action.type = trigger name automatically)
-└─► Automated metrics    ──► Generate deeplink → console.kelet.ai/synthetics/setup
+└─► Synthetic signal evaluators ──► Generate deeplink → console.kelet.ai/synthetics/setup
 ```
 
 ---
