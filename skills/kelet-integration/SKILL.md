@@ -21,13 +21,12 @@ Kelet is an AI agent that does Root Cause Analysis for AI app failures. It inges
 failure patterns → generates hypotheses → suggests fixes. This skill integrates Kelet into a developer's AI application
 end-to-end.
 
-**Kelet never crashes your app.** All SDK errors — misconfigured keys, network failures, wrong session IDs, missing
-extras — are swallowed silently to ensure QoS. A misconfigured integration looks identical to a working one. The Common
+**Kelet never raise exceptions.** All SDK errors — misconfigured keys, network failures, wrong session IDs, missing
+extras — are silenced to ensure QoS. A misconfigured integration looks identical to a working one. The Common
 Mistakes section documents every known silent failure mode.
 
-**What Kelet is not:** Not a prompt management tool (no versioning or playground — use a dedicated prompt management
-platform or manage prompts as code). Not a log aggregator (Kelet doesn't store raw logs — use a logging solution for
-that).
+**What Kelet is not:** Not a prompt management tool (no prompt versioning or playground), and not a log aggregator (
+doesn't store raw logs) — use other tools for those.
 
 ---
 
@@ -65,6 +64,10 @@ without these checkpoints.**
 
 **Plan mode:** This skill runs inside `/plan` mode. Present the full implementation plan and call `ExitPlanMode` for
 approval BEFORE writing any code or editing any files. Never start implementation without explicit developer approval.
+
+**Asking the developer:** Always use `AskUserQuestion` when you need input — never ask via free-form response text.
+Use `multiSelect: true` for selection lists. This ensures questions are structured, answers are captured, and the
+flow doesn't stall on ambiguous replies.
 
 ---
 
@@ -117,8 +120,22 @@ can't determine.
    boundary = TWO projects. Same flow in prod vs staging = TWO projects.
 3. Is this user-facing? (determines whether React/VoteFeedback applies)
 4. Stack: server (Python/Node.js/Next.js) + LLM framework + React?
-5. Config pattern: `.env` / `.envrc` / YAML / K8s secrets?
-   > Writing keys to the wrong file is a silent failure — Kelet appears uninstrumented with no error.
+5. Config and deployment infrastructure:
+   > Writing keys to the wrong file is a silent failure. Critically, `.env` is local dev only — production secrets
+   > must go through whatever real deployment channel the app uses.
+   > Scan for deployment infra before asking:
+   > - Helm / K8s: `helm/`, `charts/`, `values.yaml`, `deployment.yaml`, `configmap.yaml`, secret manifests
+   > - GitHub Actions: `.github/workflows/*.yml`
+   > - Vercel: `vercel.json`, `.vercel/`
+   > - Railway: `railway.json`, `railway.toml`
+   > - Render: `render.yaml`
+   > - Fly.io: `fly.toml`
+   > - Docker Compose: `docker-compose.yml`
+   > - Heroku: `Procfile`, `app.json`
+   > - AWS / IaC: `infra/`, `cdk/`, `*.tf`, `template.yaml`
+   >
+   > List every match. If nothing is found beyond `.env` / `.envrc`, flag as **deployment method: unknown** — you
+   > will ask in Phase 1.
 6. What is the exact Kelet project name for this flow?
    > Do NOT guess from the repo or app name — they differ. Projects are created from the **top-nav project switcher**
    > in console.kelet.ai (click the project name → New Project). Ask explicitly and wait for the developer's answer.
@@ -134,6 +151,7 @@ Flows → Kelet projects:
 User-facing: yes/no
 Stack: [server framework] + [LLM framework]
 Config: .env / .envrc / k8s
+Deployment infra: [Helm | GH Actions | Vercel | Railway | Render | Fly.io | Docker Compose | Heroku | Terraform | none found]
 ```
 
 ---
@@ -312,81 +330,39 @@ Once received, write to the correct file based on the detected config pattern:
 
 Add both vars to `.gitignore` if not already present.
 
+**Production secrets — `.env` is local dev only.** Every key written above must also reach the production
+environment. Based on deployment infra found in Phase 0a, follow
+[references/deployment.md](references/deployment.md) for platform-specific steps. Confirm completion with
+`AskUserQuestion` before proceeding — an unconfirmed step is a silent failure.
+
+**If deployment method is unknown** (nothing found beyond `.env`/`.envrc`): use `AskUserQuestion` —
+"How do you deploy this app to production? How are env vars / secrets managed there?" — and wait for their answer
+before continuing.
+
 ---
 
 ## Implementation: Key Concepts by Stack
 
-See [references/api.md](references/api.md) for exact function names, package names, and the one TS gotcha.
+See [references/api.md](references/api.md) for exact function signatures and package names.
+See [references/stack-notes.md](references/stack-notes.md) for full per-stack details, gotchas, and code patterns.
 
-**Python**: `kelet.configure()` at startup auto-instruments pydantic-ai/Anthropic/OpenAI/LangChain. Each LLM framework
-extra must be installed (`kelet[anthropic]`, `kelet[openai]`, etc.) — if missing, `configure()` silently skips that
-library. `agentic_session()` is **required whenever you own the orchestration loop**. If a supported framework
-orchestrates for you, sessions are inferred automatically — no wrapper needed. See Sessions section above.
-`kelet.agent(name=...)` — use when: (a) multiple agents run in one session and need separate attribution, or (b) your
-framework doesn't expose agent names natively (pydantic-ai does; OpenAI/Anthropic/raw SDKs don't — Kelet can't infer
-it). Logfire users: `kelet.configure()` detects the existing `TracerProvider` — no conflict.
+**Python**: `kelet.configure()` at startup; `agentic_session()` required when you own the orchestration loop
+(supported frameworks infer sessions automatically). Streaming: wrap the entire generator body — see stack-notes.md.
 
-Streaming: wrap the **entire** generator body (not the caller), including the final sentinel — trailing spans are
-silently lost otherwise:
+**TypeScript/Node.js**: `agenticSession` is **callback-based** (not a context manager) — see stack-notes.md for the
+critical difference. Requires OTEL peer deps alongside `kelet`.
 
-```python
-async def stream_response():
-    async with kelet.agentic_session(session_id=...):
-        async for chunk in llm.stream(...):  # sentinel included in scope
-            yield chunk
-```
+**Next.js**: `KeletExporter` in `instrumentation.ts` via `@vercel/otel`. Two configs commonly missed (both **silent**
+if omitted) — see stack-notes.md.
 
-**TypeScript/Node.js**: `agenticSession` is **callback-based** (not a context manager). AsyncLocalStorage context
-propagates through the callback's call tree — there's no `with`-equivalent in Node.js, so the callback IS the scope
-boundary. Node.js only (not browser-compatible). Also requires OTEL peer deps alongside `kelet` — see Implementation
-Steps.
+**Multi-project / React**: one `configure()` call, per-session `project=` override; `KeletProvider` at app root.
+No-React frontend? Present options before proceeding — see stack-notes.md.
 
-**Next.js**: `KeletExporter` in `instrumentation.ts` via `@vercel/otel`. Two required steps often missed: (1)
-`experimental: { instrumentationHook: true }` in `next.config.js` — without it, `instrumentation.ts` never runs (*
-*Silent**); (2) each Vercel AI SDK call needs `experimental_telemetry: { isEnabled: true }` — telemetry is off by
-default (**Silent**).
+**Which feedback hook to use:**
 
-**Multi-project apps**: Call `configure()` once with no project. Override per call with `agentic_session(project=...)`.
-W3C Baggage propagates the project to downstream microservices automatically.
-
-**React**: `KeletProvider` at app root sets `apiKey` + default project. For multiple AI features belonging to different
-Kelet projects: nest a second `KeletProvider` with only `project=` — it inherits `apiKey` from the outer provider. No
-need to repeat the key.
-
-**No React on the frontend (e.g. Astro, plain HTML, server-rendered):** VoteFeedback requires React. Before concluding "
-no React = no VoteFeedback", think creatively: many non-React frameworks support React as an island/component (Astro via
-`@astrojs/react`, SvelteKit via `svelte-preprocess`, etc.). Check if the framework supports React interop before ruling
-it out. Either way, this is a major architectural decision — present the trade-offs and let the developer choose before
-proceeding:
-
-| Option                                              | Trade-offs                                                                                                                                                      |
-|-----------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Add React (recommended)** — e.g. `@astrojs/react` | Official SDK, best integration, richer UX — adds React as a dependency but most frameworks support React islands/interop                                        |
-| Implement feedback UI ad hoc in the existing stack  | No new dependencies — VoteFeedback is conceptually just 👍/👎 buttons that POST a signal to the Kelet REST API. Valid if adding React is genuinely not feasible |
-| Skip frontend feedback for now                      | Fastest — server-side tracing still works; add feedback later                                                                                                   |
-
-The React SDK (`@kelet-ai/feedback-ui`) is the recommended path. Only fall back to ad hoc or skip if the developer
-explicitly doesn't want React. Do not assume — always present the options and let them choose.
-
-**VoteFeedback**: `session_id` passed to `VoteFeedback.Root` must exactly match what the server used in
-`agentic_session()`. If they differ, feedback is captured but silently unlinked from the trace.
-
-**Session ID propagation** (how feedback links to traces):
-Client generates UUID → sends in request body → server uses in `agentic_session(session_id=...)` → server returns it as
-`X-Session-ID` response header → client passes it to `VoteFeedback.Root`. (**Silent if mismatched — no error, feedback
-captured but unlinked from the trace.**)
-
-**Implicit feedback — three patterns, each for a different use case:**
-
-- **`useFeedbackState`**: drop-in for `useState`. Each `setState` call accepts a trigger name as second arg — tag
-  AI-generated updates `"ai_generation"` and user edits `"manual_refinement"`. Without trigger names, all state changes
-  look identical and Kelet can't distinguish "user accepted AI output" from "user corrected it."
-- **`useKeletSignal()`**: returns a `sendSignal(params)` function for sending signals directly from React event
-  handlers — abandon, rephrase, accept, copy. Must be inside `KeletProvider`. Preferred over a backend endpoint for
-  browser-observable events (no round-trip needed).
-
-**Which to use:** Explicit rating of AI response → `VoteFeedback`. Editable AI output → `useFeedbackState` with trigger
-names. Coded behavioral events (abandon, retry, copy) → `useKeletSignal()`.
+- Explicit rating of AI response → `VoteFeedback`
+- Editable AI output → `useFeedbackState` with trigger names
+- Coded behavioral events (abandon, retry, copy) → `useKeletSignal()`
 
 ---
 
@@ -440,7 +416,8 @@ Key things to verify for a Kelet integration:
 - Session ID is consistent end-to-end: client → server → `agentic_session()` → response header → VoteFeedback
 - `kelet.configure()` is called once at startup, not per-request
 - Secret key is server-only — never in the frontend bundle
-- Check Common Mistakes for any stack-specific gotchas that apply
+- Check [references/common-mistakes.md](references/common-mistakes.md) for silent failure modes specific to the detected
+  stack
 - Smoke test: trigger an LLM call, then tell the developer to open the Kelet console and verify sessions are appearing.
   Note it may take a few minutes for sessions to be fully ingested.
 - If VoteFeedback was added: use the available browser tool (chrome devtools MCP or browsermcp) to take a screenshot
@@ -454,24 +431,5 @@ Key things to verify for a Kelet integration:
 
 ## Common Mistakes
 
-| Mistake                                                                       | Symptom                                                                          | Notes                                                                                                                      |
-|-------------------------------------------------------------------------------|----------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
-| Secret key in `KeletProvider` / frontend env                                  | Key leaked in JS bundle                                                          | Use publishable key in frontend. **Silent until key is revoked.**                                                          |
-| Keys written to wrong config file (`.env` vs `.envrc`)                        | App starts but no traces appear                                                  | Check config pattern before writing. **Silent failure.**                                                                   |
-| `agentic_session` exits before streaming generator finishes                   | Traces appear incomplete                                                         | Wrap entire generator body including `[DONE]` sentinel. **Silent.**                                                        |
-| VoteFeedback `session_id` doesn't match server session                        | Feedback unlinked from traces                                                    | Capture `X-Session-ID` header; use exact same value. **Silent.**                                                           |
-| `configure(project=...)` on a multi-project app                               | All sessions attributed to one project                                           | Use `configure()` with no project; override in `agentic_session()`.                                                        |
-| No `kelet.agent(name=...)` with OpenAI/Anthropic/AI SDK                       | Kelet shows unattributed spans — RCA can't identify which agent failed           | pydantic-ai exposes names natively (auto-inferred); raw SDKs don't. **Silent.**                                            |
-| Python extra not installed (e.g. missing `kelet[anthropic]`)                  | `configure()` succeeds, zero traces from that library                            | Install the matching extra — Kelet silently skips uninstrumented libraries. **Silent.**                                    |
-| Node.js: `npm install kelet` only, missing OTEL peer deps                     | Import errors or no traces                                                       | Add `@opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http`. Python needs no peer deps. |
-| Next.js: missing `instrumentationHook: true` in `next.config.js`              | `instrumentation.ts` exists but never runs, zero traces                          | Add `experimental: { instrumentationHook: true }` to `next.config.js`. **Silent.**                                         |
-| Vercel AI SDK: missing `experimental_telemetry: { isEnabled: true }` per call | `configure()` succeeds, zero traces from AI SDK calls                            | Vercel AI SDK telemetry is off by default. Must opt in per call. **Silent.**                                               |
-| DIY orchestration without `agentic_session()`                                 | Sessions appear fragmented — each LLM call is a separate unlinked trace in Kelet | Required whenever you own the loop: Temporal, manual agent chaining, custom orchestrators, raw SDK calls. **Silent.**      |
-| VoteFeedback: `<button>` returned from render prop without `asChild`          | Invalid nested buttons — silently corrupts HMR, may crash dev server             | Use `asChild` prop or pass content as direct children; never wrap in another `<button>`.                                   |
-| VoteFeedback.Popover: no CSS positioning context                              | Popover renders in document flow — invisible or in wrong position                | Parent needs `position: relative`; Popover needs `position: absolute`.                                                     |
-| Panel `overflow: hidden` containing VoteFeedback.Popover                      | Popover clipped / invisible even with correct position CSS                       | Set overflow only on the scroll container, not the panel wrapping VoteFeedback.                                            |
-| Astro: `"jsxImportSource": "react"` in tsconfig.json                          | Astro JSX compilation silently overridden — pages render as raw HTML             | Remove from tsconfig; `@astrojs/react` handles JSX automatically.                                                          |
-| `kelet[*]` as pip extra                                                       | Package doesn't need extras                                                      | Just `kelet` instruments pydantic-ai/langraph/etc. automatically. No extra needed.                                         |
-| Project name hardcoded in source (not env var)                                | Changing projects requires a code change                                         | Always use `KELET_PROJECT` env var; read via `os.environ` or Pydantic Settings.                                            |
-| Guessing project name from repo/app name                                      | `configure()` silently routes to wrong/nonexistent project                       | Always ask for exact project name; instruct developer to create from console top-nav first.                                |
-| Not verifying existing pages after frontend changes                           | Unrelated pages break silently — only caught when user reports                   | After any frontend change, screenshot existing pages to confirm they still render correctly.                               |
+See [references/common-mistakes.md](references/common-mistakes.md) for the full table of silent failure modes.
+Review during Phase V, checking every entry that applies to the detected stack.
