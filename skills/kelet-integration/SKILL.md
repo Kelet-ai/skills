@@ -174,6 +174,8 @@ to AI content (not a general UI action).
 Based on failure modes from 0b, propose LLM-as-judge evaluators (semantic/quality) and heuristic evaluators (
 structural/metric). Delivered via deeplink — developer clicks once to activate.
 
+**Ground every evaluator in observed behavior.** Only propose evaluators for things the agent actually does — don't invent features. If you're unsure whether the agent produces a certain output (e.g. citations, confidence scores, structured data), ask the developer before proposing an evaluator that depends on it. For `code` type: the check must be fully deterministic from the raw output (e.g. response length, JSON validity, presence of a known token). If you're reaching for any natural language understanding, it's `llm`, not `code`.
+
 **STOP — present signals to the developer and ask them to select (multi-select).** This is a REQUIRED interactive
 checkpoint. Do not proceed to Phase 0d or implementation until the developer has chosen:
 > Tracing (always included): [ ] flow X  [ ] flow Y
