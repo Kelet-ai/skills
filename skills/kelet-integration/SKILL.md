@@ -43,7 +43,7 @@ Kelet is an AI agent that does Root Cause Analysis for AI app failures. It inges
 
 **If Kelet is already in the project's dependencies:** skip setup, focus on what the developer asked. Phase 0a and Phase V still apply.
 
-**Always follow phases in order: 0a → 0b → 0c → 0d → 1 → implement. After each phase, present your analysis summary to the developer and ask if it's correct before proceeding.**
+**Always follow phases in order: 0a → 0b → 0c → 0d → 1 → implement. Each phase ends with a STOP: present your findings to the developer and wait for confirmation before continuing. DO NOT chain phases silently. DO NOT write a full plan without these checkpoints.**
 
 ---
 
@@ -65,9 +65,11 @@ Always fetch current Kelet documentation before writing any integration code. Ke
 1. **Map every LLM call** — to understand the use case, flows, and failure modes (feeds into 0b/0c)
 2. **Find existing session tracking** — look for conversation IDs, request IDs, thread IDs, or any grouping mechanism. Wire it to `agentic_session()` rather than inventing new session management. Check that session identifiers are propagated consistently end-to-end. If there's a contradiction or ambiguity, **explicitly ask the developer** before proceeding.
 
+**Stay focused.** When exploring, only read what's relevant to Kelet: LLM calls, session IDs, startup/entrypoint code, existing feedback UI, UI integration with the AI, and dependencies. Skip styling, animations, auth flows, unrelated business logic — if it doesn't affect tracing or signals, ignore it. Our focus is to understand how the UI interacts with the AI or the back-end that serves it.
+
 Start with dependency files to identify AI frameworks and libraries. If you spot other repos/services that are part of the agentic flow (e.g., a frontend, another agent service) — not unrelated infra — tell the developer to run this skill there too.
 
-Produce an **Integration Map** and confirm with the developer before writing code.
+Produce an **Integration Map**, present it to the developer, and **wait for confirmation** before proceeding to Phase 0b.
 
 Infer from existing files (README, CLAUDE.md, entrypoints, dependency files, `.env`) before asking. Only ask what you can't determine.
 
@@ -108,7 +110,7 @@ The purpose of this phase is to map what "failure" looks like for Kelet's RCA en
 - Where do users react? (edit it, retry, copy, ignore, complain)
 - What implicit behaviors signal dissatisfaction? (abandon, rephrase, undo)
 
-Outputs from this phase feed directly into signal selection in 0c — each identified failure mode becomes a signal candidate.
+Outputs from this phase feed directly into signal selection in 0c — each identified failure mode becomes a signal candidate. Present the workflow + UX map to the developer and **wait for confirmation** before proceeding to Phase 0c.
 
 ---
 
@@ -128,15 +130,15 @@ Find events that imply the AI got it right or wrong — dismiss, accept, retry, 
 **3. Synthetic signals** (platform-run, no app code)
 Based on failure modes from 0b, propose LLM-as-judge evaluators (semantic/quality) and heuristic evaluators (structural/metric). Delivered via deeplink — developer clicks once to activate.
 
-**Then ask (multi-select):**
+**STOP — present signals to the developer and ask them to select (multi-select).** This is a REQUIRED interactive checkpoint. Do not proceed to Phase 0d or implementation until the developer has chosen:
 > Tracing (always included): [ ] flow X  [ ] flow Y
 > Explicit: [ ] VoteFeedback at [location]  [ ] Edit tracking on [output]
 > Coded: [ ] Signal when [behavioral event]
-> Synthetic: [ ] [evaluator name] — deeplink generated after selection
+> Synthetic: [ ] [evaluator name]
 
-Ask if any need steering to be more accurate (e.g., "does this event apply only to AI content?").
+Ask if any need steering to be more accurate (e.g., "does this event apply only to AI content?"). Wait for their response before continuing.
 
-**You don't need to implement synthetics on your own — let Kelet do that for you.** After the developer selects synthetic evaluators, generate a deeplink for the platform's AI evaluator wizard. Fill in the payload and run:
+**You don't need to implement synthetics on your own — let Kelet do that for you.** Generate the synthetics deeplink **immediately when proposing them** — don't wait for the developer to select first. They need to act on it themselves (click the link, review, activate) and can't do that if you hold it until after implementation. Generate it inline in Phase 0c: Fill in the payload and run:
 ```python
 python3 -c "
 import base64, json
@@ -183,6 +185,8 @@ A session is the logical boundary of one unit of work — all LLM calls, tool us
 
 **The framework orchestrates the flow** (pydantic-ai runs your agent loop, LangGraph manages your graph execution, a LangChain chain runs end-to-end): Kelet infers sessions automatically — no `agentic_session()` needed. Supported frameworks: pydantic-ai, LangChain/LangGraph, LlamaIndex, CrewAI, Haystack, DSPy, LiteLLM, Langfuse, and any framework using OpenInference or OpenLLMetry instrumentation. If the framework isn't listed, research whether it uses one of these instrumentation libraries before omitting `agentic_session()`.
 
+**Exception — externally managed session lifecycle:** If the app owns the session ID (e.g. stored in Redis, a database, or generated server-side and returned to the client), the framework has no knowledge of it. You MUST use `agentic_session(session_id=...)` even with a supported framework — otherwise Kelet generates its own session ID that doesn't match the one the client receives, breaking VoteFeedback linkage.
+
 Note: **Vercel AI SDK does not set session IDs automatically** — use `agenticSession()` at the route level (see Next.js section).
 
 **You own the loop** (you write the code that calls agent A, passes results to agent B, chains steps in Temporal, a custom loop, or any orchestrator you built — even if individual steps use a supported framework internally): the framework doesn't set a session ID for the overall flow. You MUST use `agentic_session(session_id=...)` / `agenticSession({ sessionId }, callback)`. (**Silent if omitted — spans appear as unlinked individual traces.**)
@@ -195,7 +199,9 @@ Two key types — never mix them:
 - **Secret key** (`KELET_API_KEY`): server-only. Traces LLM calls. Never expose to frontend.
 - **Publishable key** (`VITE_KELET_PUBLISHABLE_KEY` / `NEXT_PUBLIC_KELET_PUBLISHABLE_KEY`): frontend-safe. Used in `KeletProvider` for VoteFeedback widget.
 
-Ask the developer for keys, then write to the correct file based on the detected config pattern:
+**Ask for API keys during planning** (before presenting the final plan / calling ExitPlanMode). Implementation is blocked without them, and the developer may need time to generate or locate them. Don't wait until implementation begins.
+
+Once received, write to the correct file based on the detected config pattern:
 - `.env` → `KEY=value`
 - `.envrc` (direnv) → `export KEY=value`
 - K8s → tell developer to add to secrets manifest
@@ -225,6 +231,16 @@ async def stream_response():
 **Multi-project apps**: Call `configure()` once with no project. Override per call with `agentic_session(project=...)`. W3C Baggage propagates the project to downstream microservices automatically.
 
 **React**: `KeletProvider` at app root sets `apiKey` + default project. For multiple AI features belonging to different Kelet projects: nest a second `KeletProvider` with only `project=` — it inherits `apiKey` from the outer provider. No need to repeat the key.
+
+**No React on the frontend (e.g. Astro, plain HTML, server-rendered):** VoteFeedback requires React. Before concluding "no React = no VoteFeedback", think creatively: many non-React frameworks support React as an island/component (Astro via `@astrojs/react`, SvelteKit via `svelte-preprocess`, etc.). Check if the framework supports React interop before ruling it out. Either way, this is a major architectural decision — present the trade-offs and let the developer choose before proceeding:
+
+| Option | Trade-offs |
+|---|---|
+| **Add React (recommended)** — e.g. `@astrojs/react` | Official SDK, best integration, richer UX — adds React as a dependency but most frameworks support React islands/interop |
+| Implement feedback UI ad hoc in the existing stack | No new dependencies — VoteFeedback is conceptually just 👍/👎 buttons that POST a signal to the Kelet REST API. Valid if adding React is genuinely not feasible |
+| Skip frontend feedback for now | Fastest — server-side tracing still works; add feedback later |
+
+The React SDK (`@kelet-ai/feedback-ui`) is the recommended path. Only fall back to ad hoc or skip if the developer explicitly doesn't want React. Do not assume — always present the options and let them choose.
 
 **VoteFeedback**: `session_id` passed to `VoteFeedback.Root` must exactly match what the server used in `agentic_session()`. If they differ, feedback is captured but silently unlinked from the trace.
 
