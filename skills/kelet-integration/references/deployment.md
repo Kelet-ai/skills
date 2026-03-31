@@ -22,24 +22,26 @@ unconfirmed step is a silent failure (Kelet sees no production traces with no er
   `AskUserQuestion` before proceeding.
 
 - **GitHub Actions** (app deployed via workflow): Go to repo → **Settings → Secrets and variables → Actions → New
-  repository secret**, add `KELET_API_KEY` (and publishable key). Then add `env:` entries to the deploy job:
+  repository secret**, add `KELET_API_KEY` (and publishable key). Then add `env:` entries to the deploy job —
+  secret added but missing `env:` entry means it never reaches the container (**silent**):
   ```yaml
   env:
     KELET_API_KEY: ${{ secrets.KELET_API_KEY }}
     NEXT_PUBLIC_KELET_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_KELET_PUBLISHABLE_KEY }}
   ```
-  Confirm both steps (secret added + workflow updated) with `AskUserQuestion` before proceeding.
+  Confirm both steps (secret added + workflow updated) with `AskUserQuestion`.
 
 - **Helm / Kubernetes**: Create a K8s Secret (do NOT put values in `values.yaml` or ConfigMaps — never commit secret
   values). Reference it in the Deployment via `env[].valueFrom.secretKeyRef` or `envFrom`. Tell the developer to
-  `kubectl apply` the secret and confirm it is not committed to the repo.
+  `kubectl apply` the secret and confirm it is not committed to the repo. Confirm with `AskUserQuestion` before
+  proceeding.
 
 - **Docker Compose**: Local `.env` is fine for `docker compose up`. For production container deployments, inject via
   the host's secret management (`docker run -e KELET_API_KEY=...`, Docker Swarm secrets, etc.) — not via the Compose
-  file. Note this explicitly in the plan.
+  file. Note this explicitly in the plan. Confirm with `AskUserQuestion` before proceeding.
 
 - **Terraform / AWS CDK / CloudFormation / SAM**: Store the key in AWS Secrets Manager or SSM Parameter Store
   (SecureString). Reference it in the IaC resource definition. Ask the developer how secrets are currently managed
-  in their IaC before proposing changes — patterns vary widely.
+  in their IaC before proposing changes — patterns vary widely. Confirm with `AskUserQuestion` before proceeding.
 
 - **Not listed**: Ask the developer how secrets are managed in that platform before writing any instructions.
