@@ -39,7 +39,7 @@ Feedback signals?
 ├─► Explicit (votes)            ──► VoteFeedback / kelet.signal(kind=FEEDBACK, source=HUMAN)
 ├─► Implicit (edits)            ──► useFeedbackState (tag AI vs human updates with trigger names)
 ├─► Coded signals from React    ──► useKeletSignal() inside KeletProvider
-└─► Synthetic signal evaluators ──► Generate deeplink → console.kelet.ai/synthetics/setup
+└─► Synthetic signal evaluators ──► Generate deeplink → console.kelet.ai/<project>/synthetics/setup
 ```
 
 ## Implementation Steps

@@ -245,16 +245,16 @@ Ask if any coded signals need steering and wait for their response.
 
 **You don't need to implement synthetics — let Kelet do it.** After the developer selects evaluators, ask via
 `AskUserQuestion`: "Which Kelet project should these evaluators go into?" (default: the project from Phase 0a).
-Then **MUST EXECUTE the deeplink script with the Bash tool** and present the resulting URL as a bold action item.
+Use the confirmed project name as the `<project>` segment in the URL.
+Then **MUST EXECUTE the deeplink script with the Bash tool** (substituting the real project name) and present the resulting URL as a bold action item.
 Never show the script as a code block for the user to copy. Payload shape:
 `{ "use_case": "...", "ideas": [{ "name": "...", "evaluator_type": "llm"|"code", "description": "..." }] }`
 See [references/signals.md](references/signals.md) for the generation snippet.
 
 > **Action required → click this link to activate your synthetic evaluators:**
-> `https://console.kelet.ai/synthetics/setup?deeplink=<encoded>`
+> [paste the URL printed by the Bash script above]
 >
-> Make sure project **[confirmed project name]** is selected in the console top-nav before clicking.
-> This will generate evaluators for: [list selected names]. Click "Activate All" once you've reviewed them.
+> This will generate evaluators for: [list selected names] in project **[confirmed project name]**. Click "Activate All" once you've reviewed them.
 
 Confirm via `AskUserQuestion` that they've clicked and activated before proceeding to Phase 0d.
 

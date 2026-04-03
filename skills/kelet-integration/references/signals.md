@@ -35,7 +35,7 @@
 **Synthetic signals are Kelet's responsibility, not the developer's.**
 
 For LLM-as-judge evaluators, heuristic checks, quality monitors:
-→ Direct the developer to `https://console.kelet.ai/synthetics`
+→ Direct the developer to `https://console.kelet.ai/<project>/synthetics`
 Kelet manages evaluators there on their behalf — no code required, cold-start solution included.
 
 Only write `source=SYNTHETIC` signal code if:
@@ -140,13 +140,13 @@ preset name in the deeplink; the platform auto-configures them. Custom evaluator
 
 ## Synthetic Deeplink Generation
 
-Base64url-encode the payload, then append to `https://console.kelet.ai/synthetics/setup?deeplink=`.
+Base64url-encode the payload, then build `https://console.kelet.ai/<project>/synthetics/setup?deeplink=<encoded>` — substitute `<project>` with the project name confirmed in Phase 0a (or as asked via `AskUserQuestion`).
 
 **MUST EXECUTE this with the Bash tool** — never show as a code block for the user to copy:
 
 ```python
 python3 - c
-"import base64,json; payload={'use_case':'<use_case>','ideas':[{'name':'<name>','evaluator_type':'llm','description':'<desc>'}]}; print('https://console.kelet.ai/synthetics/setup?deeplink='+base64.urlsafe_b64encode(json.dumps(payload,separators=(',',':')).encode()).rstrip(b'=').decode())"
+"import base64,json; project='<project>'; payload={'use_case':'<use_case>','ideas':[{'name':'<name>','evaluator_type':'llm','description':'<desc>'}]}; print(f'https://console.kelet.ai/{project}/synthetics/setup?deeplink='+base64.urlsafe_b64encode(json.dumps(payload,separators=(',',':')).encode()).rstrip(b'=').decode())"
 ```
 
 Include only evaluators the developer selected. Add `"context"` to an idea only to steer the evaluator toward
