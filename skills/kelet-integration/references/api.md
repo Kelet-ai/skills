@@ -2,18 +2,19 @@
 
 ## Package Names
 
-| Stack                | Package                                                                                                                             |
-|----------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| Python               | `kelet` (pip/uv)                                                                                                                    |
-| TypeScript / Node.js | `kelet @opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http` (npm)                              |
-| React frontend       | `@kelet-ai/feedback-ui` (npm)                                                                                                       |
-| Python extras        | `kelet[anthropic]`, `kelet[openai]`, `kelet[langchain]`, `kelet[all]` — if not installed, `configure()` silently skips that library |
+| Stack                | Package                                                                                          |
+|----------------------|--------------------------------------------------------------------------------------------------|
+| Python               | `kelet` — no extras needed; auto-instruments all supported frameworks                            |
+| TypeScript / Node.js | `kelet @opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http` |
+| React frontend       | `@kelet-ai/feedback-ui`                                                                          |
 
 ## Python SDK
 
 Functions (all in `kelet` namespace):
 
-- `kelet.configure(*, api_key=None, project=None, base_url=None)` — call once at startup
+- `kelet.configure(*, api_key=None, project=None, base_url=None)` — call once at startup. All params default
+  to env vars (`KELET_API_KEY`, `KELET_PROJECT`, `KELET_API_URL`); `kelet.configure()` with no args works when
+  env vars are set.
 - `kelet.agentic_session(*, session_id, user_id=None, project=None)` — async/sync context manager AND decorator
 - `kelet.agent(*, name)` — context manager; names an agent within a session for readable multi-agent traces
 -
@@ -78,10 +79,15 @@ Use `KeletExporter` in `instrumentation.ts` via `@vercel/otel`:
 
 ## Env Vars
 
-| Variable                            | Where             | What                                                            |
-|-------------------------------------|-------------------|-----------------------------------------------------------------|
-| `KELET_API_KEY`                     | Server            | Secret key — required; configure() raises ValueError if missing |
-| `KELET_PROJECT`                     | Server (optional) | Default project name                                            |
-| `KELET_API_URL`                     | Server (optional) | Custom endpoint (self-hosted)                                   |
-| `VITE_KELET_PUBLISHABLE_KEY`        | Vite frontend     | Publishable key for KeletProvider                               |
-| `NEXT_PUBLIC_KELET_PUBLISHABLE_KEY` | Next.js           | Same, Next.js convention                                        |
+Keys are self-describing by prefix: `kelet_sk_...` = secret · `kelet_pk_...` = publishable.
+
+| Variable                            | Where             | What                                                                  |
+|-------------------------------------|-------------------|-----------------------------------------------------------------------|
+| `KELET_API_KEY`                     | Server            | Secret key — required; configure() raises ValueError if missing       |
+| `KELET_PROJECT`                     | Server            | Project name — always set, even for default (`KELET_PROJECT=default`) |
+| `KELET_API_URL`                     | Server (optional) | Custom endpoint (self-hosted)                                         |
+| `VITE_KELET_PUBLISHABLE_KEY`        | Vite frontend     | Publishable key for KeletProvider                                     |
+| `NEXT_PUBLIC_KELET_PUBLISHABLE_KEY` | Next.js           | Same, Next.js convention                                              |
+| `VITE_KELET_PROJECT`                | Vite frontend     | Project name for KeletProvider                                        |
+| `NEXT_PUBLIC_KELET_PROJECT`         | Next.js           | Same, Next.js convention                                              |
+| `PUBLIC_KELET_PROJECT`              | SvelteKit         | Same, SvelteKit convention                                            |

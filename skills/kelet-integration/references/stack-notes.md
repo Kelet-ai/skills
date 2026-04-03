@@ -1,7 +1,8 @@
 # Kelet Stack Implementation Notes
 
 ## Contents
-- [Python](#python): extras, `kelet.agent()`, streaming pattern
+
+- [Python](#python): `kelet.agent()`, streaming pattern
 - [TypeScript/Node.js](#typescriptnodejs): callback-based `agenticSession`, OTEL peers
 - [Next.js](#nextjs): `KeletExporter`, two silent configs
 - [Multi-project apps](#multi-project-apps)
@@ -14,8 +15,8 @@
 
 ## Python
 
-`kelet.configure()` at startup auto-instruments pydantic-ai/Anthropic/OpenAI/LangChain. Each LLM framework extra must
-be installed (`kelet[anthropic]`, `kelet[openai]`, etc.) — if missing, `configure()` silently skips that library.
+`kelet.configure()` at startup auto-instruments pydantic-ai/Anthropic/OpenAI/LangChain — no extras needed.
+All params default to env vars; `kelet.configure()` with no args works when `KELET_API_KEY` is set.
 `agentic_session()` is **required whenever you own the orchestration loop**. If a supported framework orchestrates for
 you, sessions are inferred automatically — no wrapper needed. See Sessions section in SKILL.md.
 
@@ -46,6 +47,7 @@ agenticSession({ sessionId, userId? }, async () => { ... })  // returns callback
 ```
 
 Requires OTEL peer deps alongside `kelet`:
+
 ```
 @opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http
 ```
@@ -57,7 +59,7 @@ Requires OTEL peer deps alongside `kelet`:
 Use `KeletExporter` in `instrumentation.ts` via `@vercel/otel`:
 
 ```ts
-new KeletExporter({ apiKey, project })
+new KeletExporter({apiKey, project})
 ```
 
 Two required steps often missed (both **silent** if omitted):
@@ -90,11 +92,11 @@ VoteFeedback requires React. Before concluding "no React = no VoteFeedback", che
 interop (Astro via `@astrojs/react`, SvelteKit via `svelte-preprocess`, etc.). This is a major architectural decision
 — present the tradeoffs and let the developer choose before proceeding:
 
-| Option | Trade-offs |
-|--------|------------|
-| **Add React (recommended)** — e.g. `@astrojs/react` | Official SDK, best integration, richer UX — adds React as a dependency but most frameworks support React islands/interop |
-| Implement feedback UI ad hoc in the existing stack | No new dependencies — VoteFeedback is conceptually just 👍/👎 buttons that POST a signal to the Kelet REST API. Valid if adding React is genuinely not feasible |
-| Skip frontend feedback for now | Fastest — server-side tracing still works; add feedback later |
+| Option                                              | Trade-offs                                                                                                                                                      |
+|-----------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Add React (recommended)** — e.g. `@astrojs/react` | Official SDK, best integration, richer UX — adds React as a dependency but most frameworks support React islands/interop                                        |
+| Implement feedback UI ad hoc in the existing stack  | No new dependencies — VoteFeedback is conceptually just 👍/👎 buttons that POST a signal to the Kelet REST API. Valid if adding React is genuinely not feasible |
+| Skip frontend feedback for now                      | Fastest — server-side tracing still works; add feedback later                                                                                                   |
 
 Do not assume — always present the options and let them choose.
 

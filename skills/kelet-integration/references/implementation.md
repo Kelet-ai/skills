@@ -1,5 +1,22 @@
 # Implementation Reference
 
+## Session ID Evaluation
+
+Before choosing a session ID, answer from the code:
+
+```
+Does the app have a new-conversation / reset / start-over concept?
+├─► Yes: does the candidate ID change at that boundary?
+│   ├─► Yes ──► ✅ Correct mapping — proceed
+│   └─► No  ──► ⚠️ Mismatch — surface it, propose a fix (e.g. generate UUID per conversation)
+└─► No reset concept found / ambiguous ──► Ask developer to confirm intended session boundary
+
+Is the candidate ID a stable user identifier (phone, email, user_id, device_id)?
+└─► Yes ──► ⚠️ It outlives sessions — use as user_id=, generate kelet_session_id UUID per conversation
+```
+
+---
+
 ## Decision Tree
 
 ```
@@ -28,10 +45,13 @@ Feedback signals?
 ## Implementation Steps
 
 1. **Project Map** — infer from files, confirm flow → project mapping
-2. **API keys** — ask for keys, detect config pattern, write to correct file
-3. **Install** — Python: `kelet[all]` or per-library extras. Node.js/Next.js: `kelet` + OTEL peer deps
-   (`@opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http`) — Python needs no
-   OTEL deps. React: `@kelet-ai/feedback-ui`
+2. **API keys** — ask for keys, detect config pattern, write to correct file. Always write `KELET_PROJECT`
+   (use `default` if not using a custom project) — explicit is better than implicit
+3. **Install** — detect package manager from lockfiles/config (`uv.lock`/`pyproject.toml` → uv,
+   `poetry.lock` → poetry, `Pipfile` → pipenv, else pip; `bun.lockb` → bun, `pnpm-lock.yaml` → pnpm,
+   `yarn.lock` → yarn, else npm). Python: install `kelet` (no extras). Node.js/Next.js: install `kelet` +
+   OTEL peer deps (`@opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http`).
+   React: install `@kelet-ai/feedback-ui`.
 4. **Instrument server** — `configure()` at startup + `agentic_session()` per flow
 5. **Instrument frontend** — `KeletProvider` at root, nested per flow if multi-project
 6. **Connect feedback** — VoteFeedback + session ID propagation if user-facing

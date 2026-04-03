@@ -1,6 +1,7 @@
 # Kelet Signals Reference
 
 ## Contents
+
 - [Signal Kinds](#signal-kinds) and [Sources](#signal-sources)
 - [Synthetic Signals: Platform vs Code](#synthetic-signals-platform-vs-code)
 - [Signal Brainstorming: 3–5 per flow](#signal-brainstorming-35-per-flow)
@@ -79,7 +80,7 @@ root causes. Good evaluators make the clusters sharp; bad ones add noise.
    (e.g. `Completeness` + `Relevance` + `Answer Relevancy`) multiply noise without adding information.
 
    | Category | What it measures | When it matters |
-   |----------|-----------------|-----------------|
+            |----------|-----------------|-----------------|
    | Comprehension | Did it understand what was asked? | Always |
    | Execution | Did it take the right actions? (retrieval, tool choice) | RAG, multi-tool |
    | Correctness | Is the output factually right? | RAG, knowledge agents |
@@ -102,35 +103,35 @@ preset name in the deeplink; the platform auto-configures them. Custom evaluator
 
 **Universal — apply to almost any agent:**
 
-| Preset Name | Type | Catches |
-|------------|------|---------|
-| `Task Completion` | llm | Did the agent accomplish the user's goal? |
-| `Conversation Completeness` | llm | User intentions left unaddressed or deflected |
-| `Answer Relevancy` | llm | Off-topic responses, padding, missed the actual question |
-| `Sentiment Analysis` | llm | User frustration, dissatisfaction, repeated corrections throughout the session |
-| `Session Health Stats` | code | Turn counts, token usage, tool frequency — structural anomalies |
+| Preset Name                 | Type | Catches                                                                        |
+|-----------------------------|------|--------------------------------------------------------------------------------|
+| `Task Completion`           | llm  | Did the agent accomplish the user's goal?                                      |
+| `Conversation Completeness` | llm  | User intentions left unaddressed or deflected                                  |
+| `Answer Relevancy`          | llm  | Off-topic responses, padding, missed the actual question                       |
+| `Sentiment Analysis`        | llm  | User frustration, dissatisfaction, repeated corrections throughout the session |
+| `Session Health Stats`      | code | Turn counts, token usage, tool frequency — structural anomalies                |
 
 **RAG / retrieval agents:**
 
-| Preset Name | Type | Catches |
-|------------|------|---------|
-| `RAG Faithfulness` | llm | Claims contradicting retrieved documents — context-specific hallucination |
-| `Hallucination Detection` | llm | Fabricated facts, non-existent citations (no retrieval context required) |
+| Preset Name               | Type | Catches                                                                   |
+|---------------------------|------|---------------------------------------------------------------------------|
+| `RAG Faithfulness`        | llm  | Claims contradicting retrieved documents — context-specific hallucination |
+| `Hallucination Detection` | llm  | Fabricated facts, non-existent citations (no retrieval context required)  |
 
 **Multi-tool / agentic:**
 
-| Preset Name | Type | Catches |
-|------------|------|---------|
-| `Loop Detection` | code | Repeated tool calls, circular execution patterns |
-| `Tool Usage Efficiency` | llm | Redundant calls, retry loops, poor sequencing |
-| `Knowledge Retention` | llm | Agent forgets facts the user provided earlier in the session |
+| Preset Name             | Type | Catches                                                      |
+|-------------------------|------|--------------------------------------------------------------|
+| `Loop Detection`        | code | Repeated tool calls, circular execution patterns             |
+| `Tool Usage Efficiency` | llm  | Redundant calls, retry loops, poor sequencing                |
+| `Knowledge Retention`   | llm  | Agent forgets facts the user provided earlier in the session |
 
 **Role / behavior:**
 
-| Preset Name | Type | Catches |
-|------------|------|---------|
-| `Role Adherence` | llm | Agent drifts outside its assigned scope or persona |
-| `Agent Over-Compliance` | llm | Sycophancy — changing answer when user pushes back without new info |
+| Preset Name             | Type | Catches                                                             |
+|-------------------------|------|---------------------------------------------------------------------|
+| `Role Adherence`        | llm  | Agent drifts outside its assigned scope or persona                  |
+| `Agent Over-Compliance` | llm  | Sycophancy — changing answer when user pushes back without new info |
 
 ⚠️ Type trap: "did the agent refuse when it should have helped?" sounds binary but requires understanding intent
 → always `llm`. Only use `code` if a junior dev could write the check in one line without reading the content.
@@ -139,21 +140,13 @@ preset name in the deeplink; the platform auto-configures them. Custom evaluator
 
 ## Synthetic Deeplink Generation
 
-Base64url-encode the payload, then append to `https://console.kelet.ai/synthetics/setup?deeplink=`:
+Base64url-encode the payload, then append to `https://console.kelet.ai/synthetics/setup?deeplink=`.
+
+**MUST EXECUTE this with the Bash tool** — never show as a code block for the user to copy:
 
 ```python
-python3 -c "
-import base64, json
-payload = {
-    'use_case': '<agent use case>',
-    'ideas': [
-        {'name': '<name>', 'evaluator_type': 'llm', 'description': '<description>'},
-        {'name': '<name>', 'evaluator_type': 'code', 'description': '<description>'},
-    ]
-}
-encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(',', ':')).encode()).rstrip(b'=').decode()
-print(f'https://console.kelet.ai/synthetics/setup?deeplink={encoded}')
-"
+python3 - c
+"import base64,json; payload={'use_case':'<use_case>','ideas':[{'name':'<name>','evaluator_type':'llm','description':'<desc>'}]}; print('https://console.kelet.ai/synthetics/setup?deeplink='+base64.urlsafe_b64encode(json.dumps(payload,separators=(',',':')).encode()).rstrip(b'=').decode())"
 ```
 
 Include only evaluators the developer selected. Add `"context"` to an idea only to steer the evaluator toward
