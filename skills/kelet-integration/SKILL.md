@@ -25,6 +25,8 @@ generates hypotheses → suggests fixes. This skill integrates Kelet into a deve
 silenced to ensure QoS. A misconfigured integration looks identical to a working one. The Common
 Mistakes section documents every known silent failure mode.
 
+**The Kelet console is at https://console.kelet.ai** — every "console" reference in this skill points there.
+
 **What Kelet is not:** Not a prompt management tool (no prompt versioning or playground), and not a log aggregator
 (doesn't store raw logs) — use other tools for those.
 
@@ -159,7 +161,8 @@ you can't determine.
 4. Deployment infra (scan before asking): `helm/`, `charts/`, `values.yaml`, `deployment.yaml`, `configmap.yaml` (K8s) ·
    `.github/workflows/*.yml` · `vercel.json` · `railway.json` · `render.yaml` · `fly.toml` · `docker-compose.yml` ·
    `Procfile`, `app.json` · `infra/`, `*.tf`, `template.yaml`. No match → flag **deployment: unknown**.
-5. Exact Kelet project name — never guess from repo name. Ask explicitly; created from console.kelet.ai top-nav.
+5. Exact Kelet project name — never guess from repo name. If the user hasn't explicitly provided it yet, ask explicitly
+   what project to use and explain how to find it from the console.kelet.ai top-nav.
    Wrong name = silent failure (data in wrong project).
 
 **Present an ASCII architecture diagram** showing the data flow, key components, and where session IDs travel:
@@ -328,8 +331,8 @@ Do not proceed until both required keys are in hand (or explicitly deferred with
 2. Instruct: "Create this project in the Kelet console — click the project name in the **top-nav** at
    console.kelet.ai, then 'New Project'."
 3. Ask via `AskUserQuestion`: "Have you created the project? What is the exact name you used?" — wait.
-4. If not created or using default: write `KELET_PROJECT=default` — always write the env var explicitly.
-   Explicit is better than implicit; omitting it creates debugging friction.
+4. Wait for confirmation. Do not proceed until the user confirms the project name.
+   If they haven't created one yet, re-send the console URL and wait.
 5. Once confirmed: write to env file as `KELET_PROJECT` (server) / `VITE_KELET_PROJECT` (Vite) /
    `PUBLIC_KELET_PROJECT` (SvelteKit) / `NEXT_PUBLIC_KELET_PROJECT` (Next.js).
    **Never hardcode the project name string in source files.**
