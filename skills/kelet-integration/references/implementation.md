@@ -46,7 +46,7 @@ Feedback signals?
 
 1. **Project Map** — infer from files, confirm flow → project mapping
 2. **API keys** — ask for keys, detect config pattern, write to correct file. Always write `KELET_PROJECT`
-   (use `default` if not using a custom project) — explicit is better than implicit
+   — SDK throws at startup if it's missing.
 3. **Install** — detect package manager from lockfiles/config (`uv.lock`/`pyproject.toml` → uv,
    `poetry.lock` → poetry, `Pipfile` → pipenv, else pip; `bun.lockb` → bun, `pnpm-lock.yaml` → pnpm,
    `yarn.lock` → yarn, else npm). Python: install `kelet` (no extras). Node.js/Next.js: install `kelet` +
