@@ -83,9 +83,9 @@ Read silently — no questions yet. Cover:
 
 1. **Deps** — AI frameworks, UI stack, package manager
 2. **Entrypoint** — where `configure()` goes
-3. **LLM call sites** — flows, failure modes, orchestration patterns
+3. **LLM call sites** — flows, orchestration patterns
 4. **Session tracking** — conversation IDs, request IDs, Redis keys, DB columns. Evaluate semantics: does the candidate ID change at reset/new-conversation? If not, surface the mismatch. See [references/implementation.md](references/implementation.md).
-5. **Existing feedback UI** — thumbs, ratings, edits, retries. Wire to these; don't replace.
+5. **Existing feedback UI** — thumbs, ratings, edits, retries, copy buttons. Wire to these; don't replace.
 6. **Deployment infra** — scan before asking: `helm/`, `charts/`, `.github/workflows/`, `vercel.json`, `railway.json`, `render.yaml`, `fly.toml`, `docker-compose.yml`, `Procfile`, `*.tf`, `template.yaml`
 
 Skip styling, auth, unrelated business logic. Flag other repos/services in the agentic flow — developer should run this skill there too.
@@ -109,7 +109,7 @@ Mode: lightweight | full
 
 ## Checkpoint 1: Mapping Confirmation
 
-Present diagram + project map + integration mode + brief workflow summary (steps, failure modes, success/failure from agent's perspective).
+Present diagram + project map + integration mode + brief workflow summary (steps, what success/failure looks like from the agent's perspective).
 
 `AskUserQuestion`: "Does this diagram, map, and workflow summary accurately represent your system? Anything I missed?"
 
@@ -119,29 +119,29 @@ If corrections change flow count, framework, or session structure — redo the a
 
 ---
 
-## Signal Analysis Pass (Silent)
+## Signal Analysis Pass (Internal Reasoning)
 
-> 🧠 One filter before any customer code: **Can Kelet derive this by looking at the session?** → synthetic (zero code). Can't? → coded signal.
+> 🧠 DO NOT SHOW THIS REASONING TO THE USER. Surface final proposals at Checkpoint 2.
 
-**Coded signals are almost always frontend** — human reacting to AI output in a browser. Go server-side only when consumer is another system, feedback happens via endpoints (e.g. `/approve`), or an external classifier scores output outside the LLM path.
+Think like an investigator planting clues: *if something goes wrong later, what breadcrumbs would help trace the source?* Don't predict failures — instrument the moments that would reveal them after the fact.
+
+**The one filter:** Can Kelet derive this clue from the session trace? → synthetic (zero code). Requires a human action or external event? → coded signal.
 
 **Synthetic (platform, no customer code):**
 
-- ONE evaluator per failure category — two on the same category multiply noise
-- Default: Task Completion + 1–2 others grounded in observed failure modes
-- See [references/signals.md](references/signals.md) for preset list
+Pick evaluators that capture meaningful quality signals for this specific use case. Anchor: Task Completion. Add 1–2 that reflect what "good" and "bad" look like for this app. ONE evaluator per dimension — duplicating a dimension multiplies noise. See [references/signals.md](references/signals.md) for preset list.
 
 **Coded — frontend (lightweight: 0–2 max):**
 
-- Only if NOT session-derivable AND there's a real existing hook in the codebase
+Almost always frontend — human reacting to AI output. Server-side only if consumer is another system or feedback arrives via an endpoint (e.g. `/approve`).
+
 - Vote → `VoteFeedback`, edits → `useFeedbackState`, behavioral events → `useKeletSignal`
 - `kind`: `FEEDBACK` · `EDIT` · `EVENT` · `METRIC` · `ARBITRARY` — `source`: `HUMAN` · `LABEL` · `SYNTHETIC`
-- **React UI scan:** When a React frontend is present, scan the component tree for existing interactive elements before settling on VoteFeedback alone. Priority (highest diagnostic value first): edit inputs on AI output → `useFeedbackState`; copy-to-clipboard, retry, session reset → `useKeletSignal`. Propose 1–2 max. Wire to existing event handlers — don't add new UI.
+- **React UI scan:** Edit inputs on AI output → `useFeedbackState`; copy-to-clipboard, retry, session reset → `useKeletSignal`. Copy is always worth proposing for apps that render AI text — even if no button exists yet, it's a natural affordance and a strong implicit signal. Propose 1–2 max.
 
+**Coded — server-side:** only if no browser UI or feedback is endpoint-driven.
 
-**Coded — server-side:** only if user isn't a browser or feedback is endpoint-driven.
-
-Prepare for Batch 2: signal proposals + project name suggestion + "what you'll see" preview.
+Prepare for Checkpoint 2: signal proposals + project name suggestion + "what you'll see" preview.
 
 ---
 
