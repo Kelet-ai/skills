@@ -13,9 +13,27 @@
 
 `kind`: `FEEDBACK` (explicit rating) · `EDIT` (user modifies AI output) · `EVENT` (retry, abandon, copy) · `METRIC` (numeric score) · `ARBITRARY` (custom)
 
-`source`: `HUMAN` (user action) · `LABEL` (human review process) · `SYNTHETIC` (automated — platform responsibility, see SKILL.md)
+`source`: `HUMAN` (user action) · `LABEL` (human review process) · `SYNTHETIC` (automated — platform responsibility)
 
 Required: `kind`, `source`, and at least one of `session_id` or `trace_id` (auto-resolved from `agentic_session` context). `score` must be 0.0–1.0 if provided.
+
+## Synthetic Signals: Platform vs Code
+
+Kelet already has the full trace: every LLM call, model response, tool invocations, latency, token counts, turn structure. That's enough information to evaluate most quality dimensions (task completion, relevance, faithfulness, hallucination, sentiment) without the developer writing a single line. Synthetic evaluators run on the platform against this trace data — no code, no deployment, cold-start included.
+
+**Default assumption: if Kelet can see it in the trace, it's a managed synthetic.** Only propose coded `source=SYNTHETIC` signals for information Kelet can't observe — e.g. a score from an external system, a domain-specific classifier running outside the LLM path, or a ground-truth comparison against a private dataset.
+
+Direct developers to `https://console.kelet.ai/<project>/synthetics` — Kelet manages evaluators there.
+
+Only write `source=SYNTHETIC` code if: (1) developer explicitly requests it AND (2) platform genuinely cannot implement it — explain why and ask developer to confirm.
+
+## Signal Priority (highest diagnostic value first)
+
+1. Edit signals — user directly shows what was wrong
+2. Explicit downvotes
+3. Abandonment / retry — strong implicit dissatisfaction
+4. Tool call failures, API errors — automated, low noise
+5. Generic page events — high noise, least specific
 
 ---
 

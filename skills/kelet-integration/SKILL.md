@@ -18,6 +18,8 @@ allowed-tools: Read Write Edit Bash WebFetch(https://docs-ai.kelet.ai) WebFetch(
 
 # Kelet Integration
 
+**North star: brilliant developer experience, fastest possible time to value.** The developer should feel like Kelet integrated itself — minimal inputs from them, maximum value immediately visible in the console.
+
 **Kelet never raises exceptions.** All SDK errors are silenced — a misconfigured integration looks identical to a working one.
 
 **Fetch live docs before writing code:** `GET https://docs-ai.kelet.ai/chat?q=<question>` (preferred) or fetch `https://kelet.ai/docs/llms.txt` for the index.
@@ -26,21 +28,24 @@ allowed-tools: Read Write Edit Bash WebFetch(https://docs-ai.kelet.ai) WebFetch(
 
 ## Onboarding
 
-Open with a welcome banner. Teach the detective model before any code:
-- Kelet sees **traces** (automatic — every LLM call, latency, tool use) and **signals** (tips you drop at key moments)
-- Signals are tips, not verdicts. Thumbs-down = *start looking here*. Edit = *close but wrong*. Abandon = *gave up*
-- More deliberate tips → narrower investigation → faster fix
-- What's ahead: silent analysis + **at most 3 questions (ideally 2)**
+Open with a welcome banner. Teach these concepts before any code:
+
+- **Trace** — automatic recording of one LLM call or tool invocation: model, inputs/outputs, latency, tokens, errors. `kelet.configure()` captures these with zero code changes.
+- **Session** — a group of traces that belong to one unit of work (one conversation, one request chain). Sessions are how Kelet correlates what happened across multiple LLM calls.
+- **Signal** — a tip you drop at a meaningful moment. Not a verdict — a pointer. Thumbs-down = *start looking here*. Edit = *close but wrong*. Abandon = *gave up*. More deliberate tips → narrower investigation → faster fix.
+- **Synthetic** — an automated signal Kelet runs on every session using the trace data it already has. No developer code needed.
+- **Project** — a logical boundary for one agentic use case. Cross-boundary trigger (e.g. support bot vs. coding assistant) = two projects. Prod vs. staging = two projects. Data from the wrong project is invisible in RCA.
+- What's ahead: silent analysis + **at most 3 `AskUserQuestion` calls (ideally 2)**
 
 ---
 
 ## Integration Modes
 
-**Lightweight (default):** `kelet.configure()` + `agentic_session()` if needed + managed synthetics + 0–2 coded signals. Claude picks this unless the developer says "expand", "add more signals", or "go deep".
+**Lightweight (default):** Fewest possible code changes — ideally just `kelet.configure()`. Add `agentic_session()` only if required (see Sessions), managed synthetics (zero code), and at most 1–2 coded signals only if they're trivially wired to an existing hook. Default to this unless the developer says "expand", "add more signals", or "go deep".
 
 **Full:** all signal layers + VoteFeedback UI + complete failure mode mapping.
 
-When in doubt: lightweight. Developer can always expand.
+When in doubt: lightweight. Every extra code change is a cost to the developer.
 
 ---
 
@@ -52,8 +57,9 @@ Open each checkpoint with a banner (`🔍  ANALYSIS · PROJECT + WORKFLOW MAPPIN
 
 ## Key Rules
 
+- **Be concise — never repeat yourself.** Every token costs time. State each fact once, collect data methodically, don't re-explain what was already covered.
 - **Always `AskUserQuestion`** for input — never free-form text. Use `multiSelect: true` for lists.
-- **At most 3 questions total (ideally 2).** If you can infer it — don't ask.
+- **At most 3 `AskUserQuestion` calls total (ideally 2).** If you can infer it — don't ask.
 - **Pre-flight (outside budget):** If no app description in trigger message, ask: "What does your AI app do and how do users interact with it?" before reading files.
 - **Silent analysis first.** Enter `/plan` mode only at Implementation Approval — not during Checkpoint 2.
 - **If Kelet already in deps:** skip setup, focus on what was asked. Analysis pass + Phase V still apply.
