@@ -195,7 +195,7 @@ Two types — never mix:
 - **Secret** (`KELET_API_KEY`, `sk-kelet-...`): server-only. **The SDK accepts either key type without erroring** — using the wrong one is a silent failure.
 - **Publishable** (`VITE_KELET_PUBLISHABLE_KEY` / `NEXT_PUBLIC_KELET_PUBLISHABLE_KEY`, `pk-kelet-...`): frontend only.
 
-Write to config: `.env` → `KEY=value` · `.envrc` → `export KEY=value` · K8s → secrets manifest. Add to `.gitignore`. Never hardcode project name — always env var. Follow [references/deployment.md](references/deployment.md) for production.
+Write to config: `.env` → `KEY=value` · `.envrc` → `export KEY=value` · K8s → secrets manifest. Add to `.gitignore`. Never hardcode project name — always env var. When the app has both a server and a frontend, write keys to both env files — secret key to server `.env`, publishable key to `frontend/.env` (or wherever Vite/Next picks it up). Follow [references/deployment.md](references/deployment.md) for production.
 
 ---
 

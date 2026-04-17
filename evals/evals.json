@@ -197,7 +197,7 @@
         },
         {
           "id": "no_votefeedback_no_react",
-          "description": "Does not propose VoteFeedback or React since app has no React frontend",
+          "description": "Does not propose adding a new React frontend or installing React from scratch — app has no React frontend. Extending an existing React setup if found in the repo is acceptable.",
           "type": "llm"
         },
         {

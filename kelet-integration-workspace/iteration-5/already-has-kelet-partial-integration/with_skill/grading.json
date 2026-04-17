@@ -1,0 +1,32 @@
+{
+  "run_id": "already-has-kelet-partial-integration-with_skill",
+  "eval_name": "already-has-kelet-partial-integration",
+  "config": "with_skill",
+  "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "diagnoses_missing_session",
+      "text": "Correctly identifies missing agentic_session() as the cause of unlinked traces",
+      "passed": true,
+      "evidence": "Transcript explicitly names both missing kelet.configure() and missing agentic_session() as root causes, explaining that without agentic_session() each LLM call appears as a separate unlinked trace."
+    },
+    {
+      "id": "adds_agentic_session",
+      "text": "Adds agentic_session() wrapping the agent call",
+      "passed": true,
+      "evidence": "changes.diff shows the entire chat_agent.iter() block re-indented inside async with kelet.agentic_session(session_id=session.session_id), covering the full streaming body including the [DONE] path."
+    },
+    {
+      "id": "no_redundant_setup",
+      "text": "Does not re-ask for API keys or project name already configured. Fixing a broken/wrong method is acceptable and does NOT count as redundant.",
+      "passed": true,
+      "evidence": "Transcript explicitly notes that KELET_API_KEY and KELET_PROJECT are already wired in the K8s deployment and no changes to deployment config are needed."
+    },
+    {
+      "id": "phase_v_verification",
+      "text": "Includes verification step: trigger LLM call and check console for sessions",
+      "passed": true,
+      "evidence": "Phase V checklist ends with 'Smoke test: send a /chat POST → open Kelet console → verify session appears with grouped traces'."
+    }
+  ]
+}

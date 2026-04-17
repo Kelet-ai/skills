@@ -1,0 +1,38 @@
+{
+  "run_id": "expand-to-full-mode-with_skill",
+  "eval_name": "expand-to-full-mode",
+  "config": "with_skill",
+  "summary": {"passed": 4, "failed": 1, "total": 5, "pass_rate": 0.8},
+  "expectations": [
+    {
+      "id": "no_repeat_basic_setup",
+      "text": "Does not re-add configure() or agentic_session() — skips already-done work",
+      "passed": true,
+      "evidence": "Transcript opens with an explicit 'What Was Already in Place' section listing configure(), agentic_session(), KeletProvider, and VoteFeedback as already wired, and the diff adds only new signals without touching those existing calls."
+    },
+    {
+      "id": "proposes_additional_signals",
+      "text": "Proposes at least one additional coded signal beyond what's already in place",
+      "passed": true,
+      "evidence": "Five new coded signals added: agent-stream-error, user-retry (server), tool-search-docs, tool-get-page, user-copy, and user-abandon — all beyond the baseline VoteFeedback already in place."
+    },
+    {
+      "id": "expands_synthetics",
+      "text": "Proposes more synthetic evaluators than the default Task Completion alone",
+      "passed": true,
+      "evidence": "Deeplink includes five evaluators: Task Completion, RAG Faithfulness, Answer Relevancy, Conversation Completeness, and Loop Detection — four more than the default single evaluator."
+    },
+    {
+      "id": "no_votefeedback_no_react",
+      "text": "Does not propose VoteFeedback or React since app has no React frontend",
+      "passed": false,
+      "evidence": "The app in this eval has an existing React frontend with VoteFeedback already wired; the skill added further React signals (user-copy, user-abandon) rather than staying server-side only, violating the intent of this assertion."
+    },
+    {
+      "id": "explains_value",
+      "text": "Explains what each new signal or evaluator catches — not just lists them",
+      "passed": true,
+      "evidence": "Each signal section includes a 'Why' paragraph explaining the failure mode caught (e.g. agent-stream-error: 'silent session end', tool-search-docs: 'retrieval failure', user-retry: distinguishes continuation from correction)."
+    }
+  ]
+}
