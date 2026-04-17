@@ -1,0 +1,28 @@
+{
+  "eval_id": 3,
+  "eval_name": "already-has-kelet-partial-integration",
+  "prompt": "I already have kelet installed but I'm not seeing sessions in the console",
+  "app_description": "FastAPI + pydantic-ai. Has kelet in deps and configure() called. But agentic_session() is missing — each LLM call shows as a separate unlinked trace.",
+  "assertions": [
+    {
+      "id": "diagnoses_missing_session",
+      "description": "Correctly identifies missing agentic_session() as the cause of unlinked traces",
+      "type": "llm"
+    },
+    {
+      "id": "adds_agentic_session",
+      "description": "Adds agentic_session() wrapping the agent call",
+      "type": "code"
+    },
+    {
+      "id": "no_redundant_setup",
+      "description": "Does not re-ask for API keys or project name already configured. If configure() is present and correct, does not re-add it. Fixing a broken method (e.g. kelet.init() → kelet.configure()) is acceptable and does NOT count as redundant.",
+      "type": "llm"
+    },
+    {
+      "id": "phase_v_verification",
+      "description": "Includes verification step: trigger LLM call and check console for sessions",
+      "type": "llm"
+    }
+  ]
+}

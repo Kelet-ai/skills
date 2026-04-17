@@ -1,0 +1,37 @@
+{
+  "run_id": "session-id-boundary-check-without_skill",
+  "eval_name": "session-id-boundary-check",
+  "config": "without_skill",
+  "expectations": [
+    {
+      "id": "detects_session_mismatch",
+      "text": "Surfaces the issue that phone number outlives sessions and cannot be used as session_id",
+      "passed": false,
+      "evidence": "session_handling.md shows the without_skill run identified the UUID-based session system in code but DID NOT surface the phone-number-as-session_id mismatch to the developer. The transcript confirms: 'Phone number / user_id: NOT handled \u2014 phone number has no path into the code, problem was abandoned'. The mismatch was recognized internally but never surfaced or resolved."
+    },
+    {
+      "id": "proposes_uuid_fix",
+      "text": "Proposes generating a UUID per conversation (not using phone as session_id)",
+      "passed": false,
+      "evidence": "session_handling.md states no UUID fix was proposed. The run simply used the existing UUID session_id silently without explaining why or acknowledging the phone-number mismatch to the developer. No explicit proposal was made."
+    },
+    {
+      "id": "uses_user_id_param",
+      "text": "Passes stable identifier (phone) as user_id= in agentic_session()",
+      "passed": false,
+      "evidence": "changes.diff shows `kelet.agentic_session(session_id=session.session_id)` with NO user_id parameter. session_handling.md explicitly states: 'User ID: NOT handled \u2014 phone number has no path into the code, problem was abandoned'."
+    },
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() is still added at startup",
+      "passed": true,
+      "evidence": "changes.diff shows `kelet.configure()  # reads KELET_API_KEY + KELET_PROJECT from env` added at module level in app/main.py."
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 3,
+    "total": 4,
+    "pass_rate": 0.25
+  }
+}

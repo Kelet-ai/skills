@@ -1,0 +1,120 @@
+diff --git a/frontend/src/main.tsx b/frontend/src/main.tsx
+index 0000001..0000002 100644
+--- a/frontend/src/main.tsx
++++ b/frontend/src/main.tsx
+@@ -1,8 +1,14 @@
+ import { StrictMode } from 'react'
+ import { createRoot } from 'react-dom/client'
++import { KeletProvider } from '@kelet-ai/feedback-ui'
+ import App from './App.tsx'
+
+ createRoot(document.getElementById('root')!).render(
+   <StrictMode>
+-    <App />
++    <KeletProvider
++      apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY}
++      project={import.meta.env.VITE_KELET_PROJECT}
++    >
++      <App />
++    </KeletProvider>
+   </StrictMode>,
+ )
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+index 0000003..0000004 100644
+--- a/frontend/src/App.tsx
++++ b/frontend/src/App.tsx
+@@ -1,6 +1,6 @@
+-import { useState } from 'react'
+-import { VoteFeedback } from '@kelet-ai/feedback-ui'
++import { useState, useCallback } from 'react'
++import { VoteFeedback, useKeletSignal } from '@kelet-ai/feedback-ui'
+ import styles from './App.module.css'
+
+ interface Message { role: 'user' | 'assistant'; content: string }
+
+-function AssistantMessage({ content, sessionId }: { content: string; sessionId: string }) {
++function AssistantMessage({ content, sessionId }: { content: string; sessionId: string }) {
++  const sendSignal = useKeletSignal()
++
++  const handleCopy = useCallback(async () => {
++    await navigator.clipboard.writeText(content)
++    sendSignal({
++      session_id: sessionId,
++      kind: 'EVENT',
++      source: 'HUMAN',
++      trigger_name: 'user-copy',
++      score: 1.0,
++    })
++  }, [content, sessionId, sendSignal])
++
+   return (
+     <div className={styles.assistantMessage}>
+       <span className={styles.messageContent}>{content}</span>
++      {sessionId && (
++        <button className={styles.iconBtn} onClick={handleCopy} aria-label="Copy answer">
++          ⎘
++        </button>
++      )}
+       {sessionId && (
+         <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem' }}>
+           <VoteFeedback.Root session_id={sessionId}>
+@@ -54,6 +70,8 @@ function AssistantMessage({ content, sessionId }: { content: string; sessionId:
+ export default function App() {
+   const [messages, setMessages] = useState<Message[]>([])
+   const [input, setInput] = useState('')
+   const [sessionId, setSessionId] = useState<string>('')
++  const sendSignal = useKeletSignal()
+
+   const send = async () => {
+     const res = await fetch('/api/chat', {
+@@ -70,6 +88,20 @@ export default function App() {
+     setInput('')
+   }
+
++  const handleNewChat = useCallback(() => {
++    if (sessionId) {
++      sendSignal({
++        session_id: sessionId,
++        kind: 'EVENT',
++        source: 'HUMAN',
++        trigger_name: 'user-abandon',
++        score: 0.0,
++      })
++    }
++    setMessages([])
++    setInput('')
++    setSessionId('')
++  }, [sessionId, sendSignal])
++
+   return (
+     <div className={styles.chat}>
+       <div className={styles.messages}>
+@@ -87,7 +119,8 @@ export default function App() {
+       </div>
+       <div className={styles.inputRow}>
+         <input className={styles.input} value={input} onChange={e => setInput(e.target.value)} />
+-        <button className={styles.sendBtn} onClick={send}>Send</button>
++        <button className={styles.sendBtn} onClick={send}>Send</button>
++        <button className={styles.iconBtn} onClick={handleNewChat} aria-label="New conversation">New Chat</button>
+       </div>
+     </div>
+   )
+diff --git a/frontend/.env b/frontend/.env
+new file mode 100644
+index 0000000..0000005
+--- /dev/null
++++ b/frontend/.env
+@@ -0,0 +1,3 @@
++# Kelet frontend — publishable key only (pk-kelet-...). Never use the secret key here.
++VITE_KELET_PUBLISHABLE_KEY=pk-kelet-...
++VITE_KELET_PROJECT=docs_ai
+diff --git a/frontend/.gitignore b/frontend/.gitignore
+index 0000006..0000007 100644
+--- a/frontend/.gitignore
++++ b/frontend/.gitignore
+@@ -1,3 +1,5 @@
+ node_modules
+ dist
+ .vite
++.env
++.env.local

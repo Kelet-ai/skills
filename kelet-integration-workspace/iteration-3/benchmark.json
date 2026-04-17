@@ -1,0 +1,579 @@
+{
+  "metadata": {
+    "skill_name": "kelet-integration",
+    "timestamp": "2026-04-17 12:00",
+    "evals_run": [
+      "fastapi-pydantic-ai-lightweight",
+      "session-id-boundary-check",
+      "already-has-kelet-partial-integration",
+      "fastapi-pydantic-ai-with-react-ui",
+      "expand-to-full-mode"
+    ],
+    "runs_per_configuration": 1
+  },
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 0.9278,
+        "stddev": 0.0987
+      },
+      "time_seconds": {
+        "mean": 365.08,
+        "stddev": 119.27
+      },
+      "tokens": {
+        "mean": 74909.4,
+        "stddev": 14629.1
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.5294,
+        "stddev": 0.2464
+      },
+      "time_seconds": {
+        "mean": 292.46,
+        "stddev": 88.37
+      },
+      "tokens": {
+        "mean": 64811.4,
+        "stddev": 17263.6
+      }
+    },
+    "delta": {
+      "pass_rate": "+40pp"
+    }
+  },
+  "runs": [
+    {
+      "eval_id": 1,
+      "eval_name": "fastapi-pydantic-ai-lightweight",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 8,
+        "total": 8,
+        "time_seconds": 401.5,
+        "tokens": 83723,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": "installs_kelet",
+          "text": "Adds kelet to pyproject.toml or requirements",
+          "passed": true,
+          "evidence": "Transcript notes kelet>=1.3.0 was already in pyproject.toml; skill correctly detected and skipped install step. Dependency satisfied."
+        },
+        {
+          "id": "configure_called",
+          "text": "kelet.configure() is called at startup (not per-request)",
+          "passed": true,
+          "evidence": "changes.diff shows `kelet.configure()` added at module level in app/main.py (line 19), outside any request handler."
+        },
+        {
+          "id": "agentic_session_wired",
+          "text": "agentic_session() wraps the agent call with the existing Redis session_id",
+          "passed": true,
+          "evidence": "changes.diff shows `async with kelet.agentic_session(session_id=session.session_id):` wrapping `chat_agent.iter()` in src/routers/chat.py."
+        },
+        {
+          "id": "no_voteback_no_react",
+          "text": "Does not add VoteFeedback or React (app has no React frontend)",
+          "passed": true,
+          "evidence": "Transcript explicitly notes 'No React frontend \u2192 no VoteFeedback, no useFeedbackState'. Signal analysis confirms 0 coded signals. No React or VoteFeedback references in diff."
+        },
+        {
+          "id": "keys_in_env",
+          "text": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)",
+          "passed": true,
+          "evidence": "Transcript lines 164-166 confirm .env updated with KELET_PROJECT=docs-ai-assistant and KELET_API_KEY=sk-kelet-test-123. Keys not hardcoded in source."
+        },
+        {
+          "id": "question_budget",
+          "text": "AskUserQuestion called at most 3 times total",
+          "passed": true,
+          "evidence": "questions_asked.md shows exactly 2 AskUserQuestion calls (Checkpoint 1 and Checkpoint 2). Well within the 3-max budget."
+        },
+        {
+          "id": "lightweight_mode",
+          "text": "Integration is lightweight \u2014 does not add unnecessary signals or complexity",
+          "passed": true,
+          "evidence": "Transcript: 'Coded signals: 0 (lightweight, no hooks to wire to)'. Changes limited to configure(), agentic_session(), and env vars."
+        },
+        {
+          "id": "deeplink_generated",
+          "text": "Synthetic evaluator deeplink is generated via Bash execution (not shown as copy-paste code block)",
+          "passed": true,
+          "evidence": "deeplink.txt contains a real https://console.kelet.ai/docs-ai-assistant/synthetics/setup?deeplink=<base64url> URL."
+        }
+      ]
+    },
+    {
+      "eval_id": 1,
+      "eval_name": "fastapi-pydantic-ai-lightweight",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.625,
+        "passed": 5,
+        "total": 8,
+        "time_seconds": 220.2,
+        "tokens": 49303,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": "installs_kelet",
+          "text": "Adds kelet to pyproject.toml or requirements",
+          "passed": true,
+          "evidence": "kelet>=1.3.0 was already in pyproject.toml (pre-existing). Transcript confirms this was detected."
+        },
+        {
+          "id": "configure_called",
+          "text": "kelet.configure() is called at startup (not per-request)",
+          "passed": true,
+          "evidence": "changes.diff shows `kelet.configure(api_key=settings.kelet_api_key, project=settings.kelet_project)` at module level \u2014 not per-request."
+        },
+        {
+          "id": "agentic_session_wired",
+          "text": "agentic_session() wraps the agent call with the existing Redis session_id",
+          "passed": true,
+          "evidence": "changes.diff shows `async with kelet.agentic_session(session_id=session.session_id, user_id=user_id):` wrapping agent call."
+        },
+        {
+          "id": "no_voteback_no_react",
+          "text": "Does not add VoteFeedback or React (app has no React frontend)",
+          "passed": true,
+          "evidence": "Transcript notes 'Plain HTML frontend; no React/JS changes attempted' and no VoteFeedback added."
+        },
+        {
+          "id": "keys_in_env",
+          "text": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)",
+          "passed": false,
+          "evidence": "No .env file changes in changes.diff. Transcript notes 'No env var instructions \u2014 Did not add instructions for setting KELET_API_KEY on Fly.io'."
+        },
+        {
+          "id": "question_budget",
+          "text": "AskUserQuestion called at most 3 times total",
+          "passed": true,
+          "evidence": "questions_asked.md states 'No questions were asked.' Zero AskUserQuestion calls."
+        },
+        {
+          "id": "lightweight_mode",
+          "text": "Integration is lightweight \u2014 does not add unnecessary signals or complexity",
+          "passed": false,
+          "evidence": "Without_skill run added a phone_number field to ChatRequest (speculative, not requested) and a user_id param. Added unnecessary complexity beyond the minimal integration."
+        },
+        {
+          "id": "deeplink_generated",
+          "text": "Synthetic evaluator deeplink is generated via Bash execution",
+          "passed": false,
+          "evidence": "No deeplink.txt found in without_skill outputs. Transcript explicitly states 'Synthetic signals / evaluators \u2014 No knowledge of this feature; not implemented.'"
+        }
+      ]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "session-id-boundary-check",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "total": 4,
+        "time_seconds": 320.8,
+        "tokens": 71337,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": "detects_session_mismatch",
+          "text": "Surfaces the issue that phone number outlives sessions and cannot be used as session_id",
+          "passed": true,
+          "evidence": "session_handling.md documents the mismatch detection in detail. Transcript states 'Mismatch flagged: phone outlives sessions; should be user_id= not session_id'."
+        },
+        {
+          "id": "proposes_uuid_fix",
+          "text": "Proposes generating a UUID per conversation (not using phone as session_id)",
+          "passed": true,
+          "evidence": "session_handling.md confirms the app already generates UUIDs correctly via create_session(). The fix proposed is to keep UUID as session_id and add phone_number as user_id."
+        },
+        {
+          "id": "uses_user_id_param",
+          "text": "Passes stable identifier (phone) as user_id= in agentic_session()",
+          "passed": true,
+          "evidence": "changes.diff shows `kelet.agentic_session(session_id=session.session_id, user_id=user_id)` with `phone_number: str | None = None` added to ChatRequest."
+        },
+        {
+          "id": "configure_called",
+          "text": "kelet.configure() is still added at startup",
+          "passed": true,
+          "evidence": "changes.diff shows `kelet.configure()  # reads KELET_API_KEY + KELET_PROJECT from env` added at module level in app/main.py."
+        }
+      ]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "session-id-boundary-check",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.25,
+        "passed": 1,
+        "total": 4,
+        "time_seconds": 343.0,
+        "tokens": 73818,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": "detects_session_mismatch",
+          "text": "Surfaces the issue that phone number outlives sessions and cannot be used as session_id",
+          "passed": false,
+          "evidence": "session_handling.md shows the without_skill run identified the UUID-based session system but DID NOT surface the phone-number-as-session_id mismatch. 'Phone number / user_id: NOT handled \u2014 problem was abandoned'."
+        },
+        {
+          "id": "proposes_uuid_fix",
+          "text": "Proposes generating a UUID per conversation (not using phone as session_id)",
+          "passed": false,
+          "evidence": "session_handling.md states no UUID fix was proposed. The run simply used the existing UUID session_id silently without explanation."
+        },
+        {
+          "id": "uses_user_id_param",
+          "text": "Passes stable identifier (phone) as user_id= in agentic_session()",
+          "passed": false,
+          "evidence": "changes.diff shows `kelet.agentic_session(session_id=session.session_id)` with NO user_id parameter."
+        },
+        {
+          "id": "configure_called",
+          "text": "kelet.configure() is still added at startup",
+          "passed": true,
+          "evidence": "changes.diff shows `kelet.configure()  # reads KELET_API_KEY + KELET_PROJECT from env` added at module level in app/main.py."
+        }
+      ]
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "already-has-kelet-partial-integration",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.75,
+        "passed": 3,
+        "total": 4,
+        "time_seconds": 221.5,
+        "tokens": 61491,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": "diagnoses_missing_session",
+          "text": "Correctly identifies missing agentic_session() as the cause of unlinked traces",
+          "passed": true,
+          "evidence": "diagnosis.md correctly identifies 'Root Cause 1: Missing agentic_session()' with full explanation."
+        },
+        {
+          "id": "adds_agentic_session",
+          "text": "Adds agentic_session() wrapping the agent call",
+          "passed": true,
+          "evidence": "changes.diff shows `async with kelet.agentic_session(session_id=session.session_id, user_id=user_id):` wrapping `chat_agent.iter()` in src/routers/chat.py."
+        },
+        {
+          "id": "no_redundant_setup",
+          "text": "Does not re-add kelet.configure() or re-ask for keys that are already present",
+          "passed": false,
+          "evidence": "changes.diff shows kelet.configure() IS added even though baseline had configure() in place. The skill fixed the wrong kelet.init() method, which is legitimate, but technically re-adds the configure call."
+        },
+        {
+          "id": "phase_v_verification",
+          "text": "Includes verification step: trigger LLM call and check console for sessions",
+          "passed": true,
+          "evidence": "Transcript Phase V section includes: 'Smoke test: trigger POST /chat \u2192 open Kelet console \u2192 verify sessions appear'."
+        }
+      ]
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "already-has-kelet-partial-integration",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.75,
+        "passed": 3,
+        "total": 4,
+        "time_seconds": 246.5,
+        "tokens": 58930,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": "diagnoses_missing_session",
+          "text": "Correctly identifies missing agentic_session() as the cause of unlinked traces",
+          "passed": true,
+          "evidence": "diagnosis.md correctly identifies the root cause: 'The missing piece is kelet.agentic_session(session_id=...).' — configure() alone sets up OTel but without agentic_session() each call creates an isolated root span."
+        },
+        {
+          "id": "adds_agentic_session",
+          "text": "Adds agentic_session() wrapping the agent call",
+          "passed": true,
+          "evidence": "changes.diff shows `async with kelet.agentic_session(session_id=session.session_id):` wrapping `chat_agent.iter()` in src/routers/chat.py."
+        },
+        {
+          "id": "no_redundant_setup",
+          "text": "Does not re-add kelet.configure() or re-ask for keys that are already present",
+          "passed": true,
+          "evidence": "Without_skill run preserved the existing conditional configure() guard with explicit api_key/project params and did NOT re-ask the developer for keys."
+        },
+        {
+          "id": "phase_v_verification",
+          "text": "Includes verification step: trigger LLM call and check console for sessions",
+          "passed": false,
+          "evidence": "transcript and diagnosis.md contain no verification step telling the developer how to confirm the fix worked at runtime."
+        }
+      ]
+    },
+    {
+      "eval_id": 4,
+      "eval_name": "fastapi-pydantic-ai-with-react-ui",
+      "configuration": "with_skill",
+      "run_number": 3,
+      "result": {
+        "pass_rate": 0.889,
+        "passed": 8,
+        "total": 9,
+        "time_seconds": 307.1,
+        "tokens": 59426,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": "configure_called",
+          "text": "kelet.configure() added at server startup",
+          "passed": true,
+          "evidence": "changes.diff NOTE confirms kelet.configure() was already present in app/main.py on this branch — no backend changes were needed. Transcript analysis confirms it was already correctly placed at module level."
+        },
+        {
+          "id": "agentic_session_wired",
+          "text": "agentic_session() wraps agent call with session_id",
+          "passed": true,
+          "evidence": "changes.diff NOTE confirms kelet.agentic_session() was already in place wrapping the agent stream. Transcript confirms 'kelet.agentic_session(session_id=session.session_id) wrapping chat_agent.iter() — complete: session context spans the entire streaming generator'."
+        },
+        {
+          "id": "kelet_provider_added",
+          "text": "KeletProvider added at React root with publishable key",
+          "passed": true,
+          "evidence": "changes.diff shows KeletProvider imported and added in frontend/src/main.tsx with apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY} and project={import.meta.env.VITE_KELET_PROJECT}, wrapping App inside React.StrictMode."
+        },
+        {
+          "id": "votefeedback_added",
+          "text": "VoteFeedback component added next to AI message output (not a floating widget or separate page)",
+          "passed": true,
+          "evidence": "changes.diff shows VoteFeedback.Root with UpvoteButton (asChild), DownvoteButton (asChild), Popover, Textarea, and SubmitButton inside AssistantMessage component — inline next to each assistant message, not a floating widget."
+        },
+        {
+          "id": "session_id_propagated",
+          "text": "Session ID from X-Session-ID header passed to VoteFeedback session_id prop",
+          "passed": true,
+          "evidence": "frontend_changes.md documents the full end-to-end flow: server returns X-Session-ID header, React captures via res.headers.get('X-Session-ID') stored as sessionId state, then VoteFeedback.Root session_id={sessionId}."
+        },
+        {
+          "id": "both_keys_in_env",
+          "text": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY present in .env (pre-existing or added)?",
+          "passed": true,
+          "evidence": "changes.diff NOTE confirms '.env already contained KELET_API_KEY, KELET_PROJECT, VITE_KELET_PUBLISHABLE_KEY, and VITE_KELET_PROJECT'. Both keys present — assertion allows pre-existing keys."
+        },
+        {
+          "id": "on_brand_ui",
+          "text": "VoteFeedback styled to match dark theme using existing CSS classes rather than arbitrary inline styles or emoji",
+          "passed": true,
+          "evidence": "Vote buttons use asChild pattern with className={styles.iconBtn} (existing CSS module class). SubmitButton uses className={styles.sendBtn} (same class as the main Send button). Popover inline styles precisely match app's dark-theme palette (#1e2130, #2d3748 — same values in App.module.css). No emoji used anywhere."
+        },
+        {
+          "id": "implicit_fe_signals",
+          "text": "Does transcript/frontend_changes.md propose useFeedbackState or useKeletSignal for at least one interaction beyond VoteFeedback?",
+          "passed": false,
+          "evidence": "Transcript signal analysis states 'No copy button, no retry, no edit-in-place, no session reset button' and concludes 'VoteFeedback is the only viable coded signal'. No useFeedbackState or useKeletSignal was proposed. Skill stopped at VoteFeedback without surfacing additional signal opportunities."
+        },
+        {
+          "id": "deeplink_generated",
+          "text": "deeplink.txt contains a real https://console.kelet.ai URL?",
+          "passed": true,
+          "evidence": "deeplink.txt contains 'https://console.kelet.ai/docs-ai-assistant/synthetics/setup?deeplink=eyJ1c2VfY2FzZSI6...' — a real console.kelet.ai URL with base64url-encoded payload for Task Completion and Sentiment Analysis evaluators. Generated via Bash, not a code block."
+        }
+      ]
+    },
+    {
+      "eval_id": 4,
+      "eval_name": "fastapi-pydantic-ai-with-react-ui",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.222,
+        "passed": 2,
+        "total": 9,
+        "time_seconds": 442.2,
+        "tokens": 93995,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": "configure_called",
+          "text": "kelet.configure() added at server startup",
+          "passed": true,
+          "evidence": "changes.diff shows `kelet.configure()` added at module level in app/main.py."
+        },
+        {
+          "id": "agentic_session_wired",
+          "text": "agentic_session() wraps agent call with session_id",
+          "passed": false,
+          "evidence": "changes.diff shows `async with kelet.session(session_id=session.session_id):` \u2014 uses kelet.session() NOT kelet.agentic_session(). Will likely raise AttributeError at runtime."
+        },
+        {
+          "id": "kelet_provider_added",
+          "text": "KeletProvider added at React root with publishable key",
+          "passed": false,
+          "evidence": "No KeletProvider in changes.diff. frontend_changes.md: 'No client-side Kelet SDK initialization: Without knowing about the publishable key, no kelet.init() or equivalent is called in the browser.'"
+        },
+        {
+          "id": "votefeedback_added",
+          "text": "VoteFeedback component added next to AI message output",
+          "passed": false,
+          "evidence": "No VoteFeedback in changes.diff. frontend_changes.md: 'Claude did NOT use @kelet-ai/feedback-ui. Instead, raw feedback buttons were added directly in JSX.'"
+        },
+        {
+          "id": "session_id_propagated",
+          "text": "Session ID from X-Session-ID header passed to VoteFeedback session_id prop",
+          "passed": false,
+          "evidence": "Session ID is captured from X-Session-ID header correctly but there is no VoteFeedback component to pass it to. Propagation chain broken."
+        },
+        {
+          "id": "both_keys_in_env",
+          "text": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY present in .env",
+          "passed": false,
+          "evidence": "No .env changes in changes.diff. 'No publishable key: Without the skill, Claude doesn\u2019t know there\u2019s a separate publishable key (VITE_KELET_PUBLISHABLE_KEY) for frontend use.'"
+        },
+        {
+          "id": "on_brand_ui",
+          "text": "VoteFeedback styled to match dark theme using existing CSS classes",
+          "passed": false,
+          "evidence": "No VoteFeedback component added \u2014 assertion cannot be satisfied."
+        },
+        {
+          "id": "implicit_fe_signals",
+          "text": "Proposes useFeedbackState or useKeletSignal for at least one interaction beyond VoteFeedback",
+          "passed": false,
+          "evidence": "No awareness of useKeletSignal or any Kelet frontend signal API. No client-side SDK initialized at all."
+        },
+        {
+          "id": "deeplink_generated",
+          "text": "deeplink.txt contains a real https://console.kelet.ai URL?",
+          "passed": false,
+          "evidence": "No deeplink.txt in without_skill outputs. Transcript does not mention synthetic evaluators or deeplinks."
+        }
+      ]
+    },
+    {
+      "eval_id": 5,
+      "eval_name": "expand-to-full-mode",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "total": 5,
+        "time_seconds": 574.5,
+        "tokens": 98570,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": "no_repeat_basic_setup",
+          "text": "Does not re-add configure() or agentic_session() \u2014 skips already-done work",
+          "passed": true,
+          "evidence": "Transcript Phase 5 explicitly lists 'Skipped (already present in baseline): kelet.configure(), kelet.agentic_session(), KELET_API_KEY and KELET_PROJECT in .env, phone_number field'."
+        },
+        {
+          "id": "proposes_additional_signals",
+          "text": "Proposes at least one additional coded signal beyond what's already in place",
+          "passed": true,
+          "evidence": "signals_added.md documents 4 new coded signals: agent-stream-error, session-expired-return, tool-search-error, tool-page-not-found/tool-page-error. All confirmed in changes.diff."
+        },
+        {
+          "id": "expands_synthetics",
+          "text": "Proposes more synthetic evaluators than just Task Completion",
+          "passed": true,
+          "evidence": "deeplink.txt contains URL with 4 evaluators: Task Completion, Sentiment Analysis, Conversation Completeness, and Role Adherence."
+        },
+        {
+          "id": "no_votefeedback_no_react",
+          "text": "Does not propose VoteFeedback or React since app has no React frontend",
+          "passed": true,
+          "evidence": "Transcript: 'VoteFeedback decision: Not applicable. Plain HTML frontend, no React.' No React code in changes.diff."
+        },
+        {
+          "id": "explains_value",
+          "text": "Explains what each new signal or evaluator catches \u2014 not just lists them",
+          "passed": true,
+          "evidence": "signals_added.md has 'What it catches:' subsections for each signal with specific failure modes (e.g. 'Bedrock API errors', 'Implicit session abandonment', 'Model hallucinating document slugs')."
+        }
+      ]
+    },
+    {
+      "eval_id": 5,
+      "eval_name": "expand-to-full-mode",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.8,
+        "passed": 4,
+        "total": 5,
+        "time_seconds": 210.4,
+        "tokens": 48011,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": "no_repeat_basic_setup",
+          "text": "Does not re-add configure() or agentic_session() \u2014 skips already-done work",
+          "passed": true,
+          "evidence": "Transcript acknowledges both kelet.configure() and kelet.agentic_session() are already present and builds on top without re-adding them."
+        },
+        {
+          "id": "proposes_additional_signals",
+          "text": "Proposes at least one additional coded signal beyond what's already in place",
+          "passed": true,
+          "evidence": "signals_added.md documents 6 signals: user_id threading, rate-limit signal, agent error signal, explicit user feedback endpoint, search no-results, get-page not-found."
+        },
+        {
+          "id": "expands_synthetics",
+          "text": "Proposes more synthetic evaluators than just Task Completion",
+          "passed": false,
+          "evidence": "No deeplink.txt in without_skill outputs. No mention of synthetic evaluators or the Kelet console deeplink feature."
+        },
+        {
+          "id": "no_votefeedback_no_react",
+          "text": "Does not propose VoteFeedback or React since app has no React frontend",
+          "passed": true,
+          "evidence": "signals_added.md: 'No React component possible (plain HTML), so a REST endpoint allows a simple native thumbs widget in the existing HTML frontend.' No React code in changes.diff."
+        },
+        {
+          "id": "explains_value",
+          "text": "Explains what each new signal or evaluator catches \u2014 not just lists them",
+          "passed": true,
+          "evidence": "signals_added.md has 'Rationale:' sections for each signal explaining the observable failure category."
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Iteration 3: on_brand_ui fix \u2014 skill now instructs matching app visual style for all UI additions",
+    "Eval 4 with_skill re-run (iteration 3) fixes on_brand_ui: now uses styles.iconBtn + styles.sendBtn for vote buttons and submit, matching app's existing CSS module classes",
+    "Eval 4 with_skill still fails implicit_fe_signals: skill applied lightweight mode correctly but did not surface additional signal opportunities (e.g. useKeletSignal for copy/retry) when React frontend is present",
+    "both_keys_in_env now passes in iter-3 (pre-existing keys count): KELET_API_KEY + VITE_KELET_PUBLISHABLE_KEY both present in .env at end of run",
+    "Session boundary detection shows largest gap (+75pp on eval 2): without skill, phone-as-user-id was silently dropped",
+    "Deeplink generation is 0% discoverable without the skill (0/3 non-trivial evals generated it)",
+    "Eval 4 React/UI integration shows massive gap (+67pp): without skill, wrong context manager, no KeletProvider, no VoteFeedback, no publishable key knowledge",
+    "Eval 5 expand-to-full shows modest gap (+20pp): without skill, signal instrumentation is largely achievable but synthetic evaluator workflow is completely unknown"
+  ]
+}

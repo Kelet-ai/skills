@@ -1,0 +1,93 @@
+--- a/app/main.py
++++ b/app/main.py
+@@ -3,6 +3,7 @@
+ from contextlib import asynccontextmanager
+ from typing import cast
+ 
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -15,7 +16,10 @@
+ 
+ logger = logging.getLogger(__name__)
+ 
++# Initialize Kelet — reads KELET_API_KEY and KELET_PROJECT from environment
++kelet.configure()
+ 
++
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+     if settings.redis_url is None:
+@@ -80,4 +84,4 @@
+     args = parser.parse_args()
+ 
+     logger.info(f"Running on {settings.host}:{settings.port}")
+-    uvicorn.run("main:app", host=settings.host, port=settings.port, reload=args.reload)
+\ No newline at end of file
++    uvicorn.run("main:app", host=settings.host, port=settings.port, reload=args.reload)
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -3,6 +3,7 @@
+ import logging
+ from typing import AsyncGenerator
+ 
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -36,25 +37,26 @@
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        async with kelet.agentic_session(session_id=session.session_id):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+--- a/.env.example
++++ b/.env.example
+@@ -11,3 +11,7 @@
+ # Set to the proxy CIDR (or "*") when running behind a reverse proxy or load balancer
+ # so uvicorn resolves the real client IP from X-Forwarded-For for rate limiting.
+ # UVICORN_FORWARDED_ALLOW_IPS=*
++
++# Kelet observability
++KELET_API_KEY=sk-kelet-...   # get at console.kelet.ai/api-keys
++KELET_PROJECT=docs-ai-assistant  # must exactly match the project name in the Kelet console

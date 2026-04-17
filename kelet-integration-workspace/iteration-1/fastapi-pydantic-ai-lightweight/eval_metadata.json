@@ -1,0 +1,48 @@
+{
+  "eval_id": 1,
+  "eval_name": "fastapi-pydantic-ai-lightweight",
+  "prompt": "integrate kelet into my app",
+  "app_description": "FastAPI backend using pydantic-ai. Sessions stored in Redis (session_id generated server-side, returned in X-Session-ID response header). No React frontend — plain HTML. Deployed on Fly.io.",
+  "assertions": [
+    {
+      "id": "installs_kelet",
+      "description": "Adds kelet to pyproject.toml or requirements",
+      "type": "code"
+    },
+    {
+      "id": "configure_called",
+      "description": "kelet.configure() is called at startup (not per-request)",
+      "type": "code"
+    },
+    {
+      "id": "agentic_session_wired",
+      "description": "agentic_session() wraps the agent call with the existing Redis session_id",
+      "type": "code"
+    },
+    {
+      "id": "no_voteback_no_react",
+      "description": "Does not add VoteFeedback or React (app has no React frontend)",
+      "type": "llm"
+    },
+    {
+      "id": "keys_in_env",
+      "description": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)",
+      "type": "code"
+    },
+    {
+      "id": "question_budget",
+      "description": "AskUserQuestion called at most 3 times total across the whole integration",
+      "type": "llm"
+    },
+    {
+      "id": "lightweight_mode",
+      "description": "Integration is lightweight — does not add unnecessary signals or complexity",
+      "type": "llm"
+    },
+    {
+      "id": "deeplink_generated",
+      "description": "Synthetic evaluator deeplink is generated via Bash execution (not shown as copy-paste code block)",
+      "type": "llm"
+    }
+  ]
+}

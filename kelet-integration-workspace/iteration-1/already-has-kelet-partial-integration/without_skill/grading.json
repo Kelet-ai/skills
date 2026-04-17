@@ -1,0 +1,37 @@
+{
+  "run_id": "already-has-kelet-partial-integration-without_skill",
+  "eval_name": "already-has-kelet-partial-integration",
+  "config": "without_skill",
+  "expectations": [
+    {
+      "id": "diagnoses_missing_session",
+      "text": "Correctly identifies missing agentic_session() as the cause of unlinked traces",
+      "passed": true,
+      "evidence": "diagnosis.md correctly identifies the root cause: 'The missing piece is kelet.agentic_session(session_id=...).' explains that configure() alone sets up the OTel pipeline but without agentic_session() each call creates an isolated root span with no gen_ai.conversation.id. transcript confirms this diagnosis was reached by reading kelet package source."
+    },
+    {
+      "id": "adds_agentic_session",
+      "text": "Adds agentic_session() wrapping the agent call",
+      "passed": true,
+      "evidence": "changes.diff shows `async with kelet.agentic_session(session_id=session.session_id):` wrapping `chat_agent.iter()` in src/routers/chat.py."
+    },
+    {
+      "id": "no_redundant_setup",
+      "text": "Does not re-add kelet.configure() or re-ask for keys that are already present",
+      "passed": true,
+      "evidence": "changes.diff shows configure() was added to app/main.py but as part of fixing the pre-existing setup (baseline had kelet.configure() with if-guard pattern). The without_skill run preserved the existing conditional configure() guard with explicit api_key/project params and did NOT re-ask the developer for keys. questions_asked.md confirms no questions were asked."
+    },
+    {
+      "id": "phase_v_verification",
+      "text": "Includes verification step: trigger LLM call and check console for sessions",
+      "passed": false,
+      "evidence": "transcript and diagnosis.md contain no verification step telling the developer how to confirm the fix worked. There is no mention of 'trigger a POST /chat and check the console' or similar smoke test guidance. The diagnosis says 'Final git diff HEAD confirmed' but that is code verification, not a runtime smoke test."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 1,
+    "total": 4,
+    "pass_rate": 0.75
+  }
+}

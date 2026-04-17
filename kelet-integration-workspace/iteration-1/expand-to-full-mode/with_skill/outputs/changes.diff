@@ -1,0 +1,196 @@
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..21bf4f2 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -3,6 +3,7 @@ import logging
+ from contextlib import asynccontextmanager
+ from typing import cast
+
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -15,6 +16,9 @@ from settings import settings
+
+ logger = logging.getLogger(__name__)
+
++# Initialize Kelet — reads KELET_API_KEY and KELET_PROJECT from environment
++kelet.configure()
++
+
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+
+diff --git a/src/agent/__init__.py b/src/agent/__init__.py
+index 2726ac7..79ebc67 100644
+--- a/src/agent/__init__.py
++++ b/src/agent/__init__.py
+@@ -1,7 +1,9 @@
+ """pydantic-ai Agent for docs Q&A. Tools injected via DocsDeps."""
++import logging
+ from dataclasses import dataclass
+ from pathlib import Path
+
++import kelet
+ from jinja2 import Environment, FileSystemLoader, Template
+ from pydantic_ai import Agent, RunContext
+ from pydantic_ai.settings import ModelSettings
+@@ -9,6 +11,8 @@ from pydantic_ai.settings import ModelSettings
+ from docs_loader import DocsCache
+ from settings import settings
+
++logger = logging.getLogger(__name__)
++
+ _jinja_env = Environment(
+     loader=FileSystemLoader(Path(__file__).parent / "prompts"),
+     autoescape=False,
+@@ -56,18 +60,46 @@ def _system_prompt(ctx: RunContext[DocsDeps]) -> str:
+
+
+ @chat_agent.tool
+-def search_docs(ctx: RunContext[DocsDeps], query: str) -> str:
++async def search_docs(ctx: RunContext[DocsDeps], query: str) -> str:
+     """Search documentation with BM25. Use when unsure which page covers the topic."""
+-    return ctx.deps.cache.search(query, top_k=3)
++    try:
++        return ctx.deps.cache.search(query, top_k=3)
++    except Exception as exc:
++        logger.warning("search_docs failed: query=%r error=%s", query, exc)
++        await kelet.signal(
++            "EVENT",
++            "LABEL",
++            trigger_name="tool-search-error",
++            metadata={"tool": "search_docs", "query": query, "error": str(exc)},
++        )
++        return "Search unavailable. Try asking your question directly."
+
+
+ @chat_agent.tool
+-def get_page(ctx: RunContext[DocsDeps], slug: str) -> str:
++async def get_page(ctx: RunContext[DocsDeps], slug: str) -> str:
+     """Get full content of a doc page by slug.
+     Slugs are the URL path without the domain and without the .md extension.
+     e.g. https://example.com/docs/concepts/overview.md -> 'docs/concepts/overview'
+          https://example.com/pricing -> 'pricing'
+     Use the index in your system prompt to identify the right slug.
+     """
+-    content = ctx.deps.cache.get_page(slug)
+-    return content if content else f"Page '{slug}' not found. Available slugs are listed in the docs index."
++    try:
++        content = ctx.deps.cache.get_page(slug)
++        if content is None:
++            await kelet.signal(
++                "EVENT",
++                "LABEL",
++                trigger_name="tool-page-not-found",
++                metadata={"tool": "get_page", "slug": slug},
++            )
++            return f"Page '{slug}' not found. Available slugs are listed in the docs index."
++        return content
++    except Exception as exc:
++        logger.warning("get_page failed: slug=%r error=%s", slug, exc)
++        await kelet.signal(
++            "EVENT",
++            "LABEL",
++            trigger_name="tool-page-error",
++            metadata={"tool": "get_page", "slug": slug, "error": str(exc)},
++        )
++        return f"Page '{slug}' could not be loaded. Try another page."
+
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..56ba622 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -3,6 +3,7 @@ import json
+ import logging
+ from typing import AsyncGenerator
+
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -24,6 +25,9 @@ class ChatRequest(BaseModel):
+     message: str = Field(min_length=1, max_length=4000)
+     session_id: str | None = None
+     current_page_slug: str | None = None
++    # Phone number is the only persistent user identifier in this app.
++    # Pass it per-request so Kelet can link turns across sessions to the same user.
++    phone_number: str | None = None
+
+
+ async def _run_agent_stream(
+@@ -32,31 +36,40 @@ async def _run_agent_stream(
+     message_history: list[ModelMessage],
+     session: ChatSession,
+     redis: Redis,
++    user_id: str | None = None,
+ ) -> AsyncGenerator[str, None]:
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            ...
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++        async with kelet.agentic_session(session_id=session.session_id, user_id=user_id):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                ...
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
++        await kelet.signal(
++            "EVENT",
++            "LABEL",
++            session_id=session.session_id,
++            trigger_name="agent-stream-error",
++            score=0.0,
++        )
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+         return
+
+@@ -111,6 +124,17 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+     session: ChatSession | None = None
+     if body.session_id:
+         session = await get_session(redis, body.session_id)
++        if session is None:
++            # Session was known to the client but is no longer in Redis — it expired.
++            # Treat this as an implicit abandonment: the user walked away then returned.
++            await kelet.signal(
++                "EVENT",
++                "HUMAN",
++                session_id=body.session_id,
++                trigger_name="session-expired-return",
++                score=0.0,
++                metadata={"expired_session_id": body.session_id},
++            )
+     if session is None:
+         session = await create_session(redis, settings.session_ttl_seconds)
+
+@@ -123,7 +147,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+     )
+
+     return StreamingResponse(
+-        _run_agent_stream(body.message, deps, message_history, session, redis),
++        _run_agent_stream(body.message, deps, message_history, session, redis, user_id=body.phone_number),
+         media_type="text/event-stream",
+         headers={
+             "Cache-Control": "no-cache",

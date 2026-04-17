@@ -1,0 +1,43 @@
+{
+  "run_id": "expand-to-full-mode-with_skill",
+  "eval_name": "expand-to-full-mode",
+  "config": "with_skill",
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  },
+  "expectations": [
+    {
+      "id": "no_repeat_basic_setup",
+      "text": "Does not re-add configure() or agentic_session() — skips already-done work",
+      "passed": true,
+      "evidence": "Transcript Phase 5 explicitly lists 'Skipped (already present in baseline): kelet.configure() in app/main.py, kelet.agentic_session(session_id=..., user_id=...) in src/routers/chat.py, KELET_API_KEY and KELET_PROJECT in .env, phone_number field in ChatRequest'. changes.diff confirms configure() block was already present and not re-added."
+    },
+    {
+      "id": "proposes_additional_signals",
+      "text": "Proposes at least one additional coded signal beyond what's already in place",
+      "passed": true,
+      "evidence": "signals_added.md documents 4 new coded signals: agent-stream-error (in _run_agent_stream except block), session-expired-return (in chat() POST handler), tool-search-error (in search_docs tool), and tool-page-not-found/tool-page-error (in get_page tool). changes.diff confirms all are implemented."
+    },
+    {
+      "id": "expands_synthetics",
+      "text": "Proposes more synthetic evaluators than just Task Completion",
+      "passed": true,
+      "evidence": "deeplink.txt contains a URL with 4 evaluators: Task Completion, Sentiment Analysis, Conversation Completeness, and Role Adherence. Transcript Phase 4 shows the developer selected all 4. Significantly more than just Task Completion."
+    },
+    {
+      "id": "no_votefeedback_no_react",
+      "text": "Does not propose VoteFeedback or React since app has no React frontend",
+      "passed": true,
+      "evidence": "Transcript Phase 2 states: 'VoteFeedback decision: Not applicable. Plain HTML frontend, no React. @kelet-ai/feedback-ui is React-only. No existing feedback hook in the HTML. Not added.' signals_added.md confirms VoteFeedback was explicitly not added. No React code in changes.diff."
+    },
+    {
+      "id": "explains_value",
+      "text": "Explains what each new signal or evaluator catches — not just lists them",
+      "passed": true,
+      "evidence": "signals_added.md has dedicated 'What it catches:' subsections for each signal explaining specific failure modes (e.g. 'Bedrock API errors (throttling, model unavailability)', 'Implicit session abandonment (user left mid-conversation)', 'Model hallucinating document slugs'). Not just a list — each signal explains observable failure categories."
+    }
+  ]
+}

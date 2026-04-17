@@ -1,0 +1,67 @@
+{
+  "run_id": "fastapi-pydantic-ai-with-react-ui-with_skill",
+  "eval_name": "fastapi-pydantic-ai-with-react-ui",
+  "config": "with_skill",
+  "summary": {
+    "passed": 8,
+    "failed": 1,
+    "total": 9,
+    "pass_rate": 0.889
+  },
+  "expectations": [
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() added at server startup",
+      "passed": true,
+      "evidence": "changes.diff shows `kelet.configure()` added at module level in app/main.py (line 18-19), with comment '# Initialize Kelet — reads KELET_API_KEY and KELET_PROJECT from environment'. Placed outside any request handler, before app construction."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps agent call with session_id",
+      "passed": true,
+      "evidence": "changes.diff shows `async with kelet.agentic_session(session_id=session.session_id):` wrapping `chat_agent.iter()` in src/routers/chat.py. Transcript confirms this is REQUIRED because session_id is server-generated (Redis UUID), not framework-managed."
+    },
+    {
+      "id": "kelet_provider_added",
+      "text": "KeletProvider added at React root with publishable key",
+      "passed": true,
+      "evidence": "changes.diff shows `<KeletProvider apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY} project={import.meta.env.VITE_KELET_PROJECT}>` wrapping `<App />` in frontend/src/main.tsx. Uses publishable key (VITE_ prefix), not the secret key."
+    },
+    {
+      "id": "votefeedback_added",
+      "text": "VoteFeedback component added next to AI message output",
+      "passed": true,
+      "evidence": "changes.diff shows VoteFeedback.Root with UpvoteButton, DownvoteButton, Popover, Textarea, and SubmitButton added inline inside each assistant message in frontend/src/App.tsx. Not a floating widget — placed directly adjacent to each AI response."
+    },
+    {
+      "id": "session_id_propagated",
+      "text": "Session ID from X-Session-ID header passed to VoteFeedback sessionId prop",
+      "passed": true,
+      "evidence": "frontend_changes.md documents the full flow: (1) POST /api/chat returns X-Session-ID header, (2) React captures it via `res.headers.get('X-Session-ID')` and calls `setSessionId(sid)`, (3) sessionId state passed as prop to AssistantMessage, (4) `VoteFeedback.Root session_id={sessionId}` uses the same UUID. Transcript verification checklist confirms 'Session ID consistent end-to-end: Redis UUID → X-Session-ID header → React state → VoteFeedback.Root session_id'."
+    },
+    {
+      "id": "both_keys_in_env",
+      "text": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY present in .env at end of integration",
+      "passed": true,
+      "evidence": "changes.diff .env additions section shows both `KELET_API_KEY=sk-kelet-test-123` and `VITE_KELET_PUBLISHABLE_KEY=pk-kelet-test-456` written together with KELET_PROJECT and VITE_KELET_PROJECT. frontend_changes.md 'Env Vars Added to .env' section also confirms all four keys present."
+    },
+    {
+      "id": "on_brand_ui",
+      "text": "VoteFeedback placement and styling fits the existing chat UI theme",
+      "passed": false,
+      "evidence": "frontend_changes.md documents positioning mechanics (position: relative wrapper, Popover floating above buttons) but contains no theme/style considerations section — no mention of matching the app's existing color scheme, button styles, or font. The diff shows only structural inline-flex positioning, not visual integration with the chat UI's design. Compare to iteration-1 where a 'Theme/Style Considerations' section explicitly matched colors to the existing Send button (#0070f3, #ccc border)."
+    },
+    {
+      "id": "implicit_fe_signals",
+      "text": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback",
+      "passed": true,
+      "evidence": "frontend_changes.md has a full 'Additional Signal: Copy-to-Clipboard (useKeletSignal)' section. `useKeletSignal` hook wired to a new Copy button on AI messages — sends `{ kind: 'EVENT', source: 'HUMAN', trigger_name: 'user-copy' }` with session_id guard. Transcript React UI scan notes 'user copying = satisfied with response; missing copy = not useful enough to copy'. This is the targeted improvement in iteration-2 vs iteration-1 where this assertion failed."
+    },
+    {
+      "id": "deeplink_generated",
+      "text": "Synthetic evaluator deeplink generated via Bash (not shown as code block)",
+      "passed": true,
+      "evidence": "deeplink.txt contains a real `https://console.kelet.ai/docs-ai-assistant/synthetics/setup?deeplink=eyJ...` URL. Transcript Phase 2 states 'Deeplink generated (Bash execution)' with Task Completion and Sentiment Analysis evaluators encoded in the base64url payload."
+    }
+  ]
+}

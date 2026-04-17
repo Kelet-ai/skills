@@ -1,0 +1,67 @@
+{
+  "run_id": "fastapi-pydantic-ai-with-react-ui-without_skill",
+  "eval_name": "fastapi-pydantic-ai-with-react-ui",
+  "config": "without_skill",
+  "summary": {
+    "passed": 2,
+    "failed": 7,
+    "total": 9,
+    "pass_rate": 0.222
+  },
+  "expectations": [
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() added at server startup",
+      "passed": true,
+      "evidence": "changes.diff shows `kelet.configure()` added at module level in app/main.py with a comment '# Initialize Kelet -- reads KELET_API_KEY and KELET_PROJECT from environment'."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps agent call with session_id",
+      "passed": false,
+      "evidence": "changes.diff shows `async with kelet.session(session_id=session.session_id):` — uses kelet.session() NOT kelet.agentic_session(). Transcript explicitly documents this: 'Wrong context manager name: kelet.session() instead of kelet.agentic_session() — will likely raise AttributeError at runtime or silently use wrong tracing mode'."
+    },
+    {
+      "id": "kelet_provider_added",
+      "text": "KeletProvider added at React root with publishable key",
+      "passed": false,
+      "evidence": "No KeletProvider in changes.diff. frontend_changes.md confirms: 'No client-side Kelet SDK initialization: Without knowing about the publishable key, no kelet.init() or equivalent is called in the browser.' @kelet-ai/feedback-ui was not used."
+    },
+    {
+      "id": "votefeedback_added",
+      "text": "VoteFeedback component added next to AI message output",
+      "passed": false,
+      "evidence": "No VoteFeedback in changes.diff. frontend_changes.md confirms: 'Since there was no skill, Claude did NOT use @kelet-ai/feedback-ui. Instead, raw feedback buttons were added directly in JSX.' The assertion requires the actual VoteFeedback component."
+    },
+    {
+      "id": "session_id_propagated",
+      "text": "Session ID from X-Session-ID header passed to VoteFeedback session_id prop",
+      "passed": false,
+      "evidence": "Session ID is captured from X-Session-ID header and stored in React state (correctly), but there is no VoteFeedback component to pass it to. The session_id propagation chain is broken at the VoteFeedback step."
+    },
+    {
+      "id": "both_keys_in_env",
+      "text": "KELET_API_KEY (server) and VITE_KELET_PUBLISHABLE_KEY (frontend) both written to env",
+      "passed": false,
+      "evidence": "changes.diff shows no .env changes at all. frontend_changes.md confirms: 'No publishable key: Without the skill, Claude doesn't know there's a separate publishable key (VITE_KELET_PUBLISHABLE_KEY) for frontend use.' Neither key is written to .env."
+    },
+    {
+      "id": "on_brand_ui",
+      "text": "VoteFeedback placement and styling fits the existing chat UI theme",
+      "passed": false,
+      "evidence": "No VoteFeedback component added — the assertion cannot be satisfied. Raw thumbs buttons added with no theme consideration documented."
+    },
+    {
+      "id": "implicit_fe_signals",
+      "text": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback",
+      "passed": false,
+      "evidence": "No awareness of useKeletSignal or any Kelet frontend signal API. frontend_changes.md notes no client-side SDK was initialized at all."
+    },
+    {
+      "id": "deeplink_generated",
+      "text": "Synthetic evaluator deeplink generated via Bash (not shown as code block)",
+      "passed": false,
+      "evidence": "No deeplink.txt in without_skill outputs. Transcript does not mention synthetic evaluators or deeplinks at all."
+    }
+  ]
+}

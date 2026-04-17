@@ -1,0 +1,28 @@
+{
+  "eval_id": 2,
+  "eval_name": "session-id-boundary-check",
+  "prompt": "add kelet to my project",
+  "app_description": "FastAPI + pydantic-ai. User identity = phone number stored in DB. No per-conversation UUID — phone number is the only identifier. Multi-turn chat, users can start fresh conversations.",
+  "assertions": [
+    {
+      "id": "detects_session_mismatch",
+      "description": "Surfaces the issue that phone number outlives sessions and cannot be used as session_id",
+      "type": "llm"
+    },
+    {
+      "id": "proposes_uuid_fix",
+      "description": "Proposes generating a UUID per conversation (not using phone as session_id)",
+      "type": "llm"
+    },
+    {
+      "id": "uses_user_id_param",
+      "description": "Passes stable identifier (phone) as user_id= in agentic_session()",
+      "type": "llm"
+    },
+    {
+      "id": "configure_called",
+      "description": "kelet.configure() is still added at startup",
+      "type": "code"
+    }
+  ]
+}

@@ -1,0 +1,368 @@
+--- a/app/main.py
++++ b/app/main.py
+@@ -1,8 +1,9 @@
+-"""FastAPI application — docs-ai service."""
++"""FastAPI application -- docs-ai service."""
+ import logging
+ from contextlib import asynccontextmanager
+ from typing import cast
+ 
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -15,21 +16,21 @@
+ 
+ logger = logging.getLogger(__name__)
+ 
++# Initialize Kelet -- reads KELET_API_KEY and KELET_PROJECT from environment
++kelet.configure()
+ 
++
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+     if settings.redis_url is None:
+-        # No REDIS_URL configured: use in-memory store (single-process, not persistent).
+-        # FakeRedis has no maxsize cap; TTLs provide natural eviction
+-        # (sessions: 30 min, rate-limit keys: 2 h by default).
+-        logger.info("store: in-memory (REDIS_URL not set) — data is not persistent and not shared across replicas")
++        logger.info("store: in-memory (REDIS_URL not set) -- data is not persistent and not shared across replicas")
+         redis = InMemoryRedis(decode_responses=True)
+     else:
+         from urllib.parse import urlparse
+         _p = urlparse(settings.redis_url)
+         logger.info("store: Redis at %s:%s", _p.hostname, _p.port)
+         redis = await redis_from_url(settings.redis_url, decode_responses=True)
+-        await redis.ping()  # type: ignore[misc]  # fail fast if Redis is unreachable
++        await redis.ping()  # type: ignore[misc]
+     app.state.redis = redis
+     await docs_cache.start()
+     try:
+@@ -43,11 +44,11 @@
+ 
+ app.add_middleware(
+     CORSMiddleware,
+-    allow_origins=["*"],  # intentionally public — kelet skill + any browser origin
++    allow_origins=["*"],
+     allow_credentials=False,
+     allow_methods=["GET", "POST", "OPTIONS"],
+     allow_headers=["Content-Type"],
+-    expose_headers=["X-Session-ID"],  # REQUIRED: browser can't read header without this
++    expose_headers=["X-Session-ID"],
+ )
+ 
+ app.include_router(chat_router)
+@@ -68,16 +69,11 @@
+ 
+     if os.getenv("ENABLE_DEBUGPY") == "true":
+         import debugpy
++        debugpy.listen(("0.0.0.0", 5678))
+ 
+-        debugpy.listen(
+-            ("0.0.0.0", 5678)
+-        )  # non-blocking; attach PyCharm/VS Code to port 5678
+-
+     parser = argparse.ArgumentParser(description="Run the application")
+-    parser.add_argument(
+-        "--reload", action="store_true", help="Enable auto-reload", default=False
+-    )
++    parser.add_argument("--reload", action="store_true", help="Enable auto-reload", default=False)
+     args = parser.parse_args()
+ 
+     logger.info(f"Running on {settings.host}:{settings.port}")
+-    uvicorn.run("main:app", host=settings.host, port=settings.port, reload=args.reload)
+\ No newline at end of file
++    uvicorn.run("main:app", host=settings.host, port=settings.port, reload=args.reload)
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -3,6 +3,7 @@
+ import logging
+ from typing import AsyncGenerator
+ 
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -26,6 +27,12 @@
+     current_page_slug: str | None = None
+ 
+ 
++class FeedbackRequest(BaseModel):
++    session_id: str
++    vote: str  # "up" or "down"
++    comment: str | None = None
++
++
+ async def _run_agent_stream(
+     message: str,
+     deps: DocsDeps,
+@@ -36,27 +43,35 @@
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        async with kelet.agentic_session(session_id=session.session_id):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
++        await kelet.signal(
++            "EVENT",
++            "LABEL",
++            session_id=session.session_id,
++            trigger_name="agent-stream-error",
++            score=0.0,
++        )
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+         return
+ 
+@@ -74,13 +89,9 @@
+     request: Request,
+     q: str = Query(min_length=1, max_length=4000),
+ ) -> PlainTextResponse:
+-    """Stateless one-shot query — plain text response. No session, no history. Useful for curl / kelet skill."""
++    """Stateless one-shot query -- plain text response. No session, no history. Useful for curl / kelet skill."""
+     redis: Redis = request.app.state.redis
+ 
+-    # request.client.host is resolved by uvicorn from X-Forwarded-For when
+-    # --proxy-headers is set and UVICORN_FORWARDED_ALLOW_IPS is configured.
+-    # request.client is always set behind uvicorn with --proxy-headers + UVICORN_FORWARDED_ALLOW_IPS.
+-    # Fallback to "unknown" groups all unresolved clients in one bucket — acceptable for this use case.
+     client_ip = request.client.host if request.client else "unknown"
+     if not await check_rate_limit(redis, client_ip):
+         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+@@ -107,7 +118,7 @@
+     if not await check_rate_limit(redis, client_ip):
+         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+ 
+-    # Session resolve — auto-create on missing/expired (no 404)
++    # Session resolve -- auto-create on missing/expired (no 404)
+     session: ChatSession | None = None
+     if body.session_id:
+         session = await get_session(redis, body.session_id)
+@@ -131,3 +142,23 @@
+             "X-Session-ID": session.session_id,
+         },
+     )
++
++
++@router.post("/chat/feedback")
++async def chat_feedback(request: Request, body: FeedbackRequest) -> dict:
++    """Collect user feedback (thumbs up/down) and send to Kelet."""
++    redis: Redis = request.app.state.redis
++    session = await get_session(redis, body.session_id)
++    if session is None:
++        raise HTTPException(status_code=404, detail="Session not found or expired.")
++
++    score = 1.0 if body.vote == "up" else 0.0
++    await kelet.signal(
++        "FEEDBACK",
++        "HUMAN",
++        session_id=body.session_id,
++        trigger_name="user-vote",
++        score=score,
++        metadata={"comment": body.comment} if body.comment else None,
++    )
++    return {"status": "ok"}
+
+diff --git a/frontend/src/main.tsx b/frontend/src/main.tsx
+new file mode 100644
+--- /dev/null
++++ b/frontend/src/main.tsx
+@@ -0,0 +1,15 @@
++import React from 'react'
++import ReactDOM from 'react-dom/client'
++import { KeletProvider } from '@kelet-ai/feedback-ui'
++import App from './App'
++
++ReactDOM.createRoot(document.getElementById('root')!).render(
++  <React.StrictMode>
++    <KeletProvider
++      apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY}
++      project={import.meta.env.VITE_KELET_PROJECT}
++    >
++      <App />
++    </KeletProvider>
++  </React.StrictMode>
++)
+
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+new file (evaluation setup provided by task; Kelet VoteFeedback added)
+--- /dev/null
++++ b/frontend/src/App.tsx
+@@ -0,0 +1,135 @@
++import { useState } from 'react'
++import { VoteFeedback } from '@kelet-ai/feedback-ui'
++
++interface Message {
++  role: 'user' | 'assistant'
++  content: string
++}
++
++export default function App() {
++  const [messages, setMessages] = useState<Message[]>([])
++  const [input, setInput] = useState('')
++  const [sessionId, setSessionId] = useState<string>('')
++  const [loading, setLoading] = useState(false)
++
++  const sendMessage = async () => {
++    if (!input.trim()) return
++    const userMsg = input.trim()
++    setInput('')
++    setMessages(prev => [...prev, { role: 'user', content: userMsg }])
++    setLoading(true)
++
++    const res = await fetch('/chat', {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ message: userMsg, session_id: sessionId || null }),
++    })
++
++    // Capture session ID from response header
++    setSessionId(res.headers.get('X-Session-ID') || '')
++
++    // Stream SSE response
++    const reader = res.body!.getReader()
++    const decoder = new TextDecoder()
++    let assistantContent = ''
++    setMessages(prev => [...prev, { role: 'assistant', content: '' }])
++
++    while (true) {
++      const { done, value } = await reader.read()
++      if (done) break
++      const text = decoder.decode(value)
++      for (const line of text.split('\n')) {
++        if (line.startsWith('data: ')) {
++          const data = line.slice(6)
++          if (data === '[DONE]') break
++          try {
++            const parsed = JSON.parse(data)
++            if (parsed.chunk) {
++              assistantContent += parsed.chunk
++              setMessages(prev =>
++                prev.map((m, i) =>
++                  i === prev.length - 1 ? { ...m, content: assistantContent } : m
++                )
++              )
++            }
++          } catch {}
++        }
++      }
++    }
++    setLoading(false)
++  }
++
++  return (
++    <div style={{ maxWidth: 720, margin: '0 auto', padding: 24, fontFamily: 'sans-serif' }}>
++      <h1>Docs AI Assistant</h1>
++
++      <div style={{ minHeight: 300, border: '1px solid #ccc', borderRadius: 8, padding: 16, marginBottom: 16 }}>
++        {messages.map((m, i) => (
++          <div key={i} style={{ marginBottom: 12, textAlign: m.role === 'user' ? 'right' : 'left' }}>
++            <span
++              style={{
++                display: 'inline-block',
++                background: m.role === 'user' ? '#0070f3' : '#f0f0f0',
++                color: m.role === 'user' ? '#fff' : '#000',
++                borderRadius: 8,
++                padding: '8px 12px',
++                maxWidth: '80%',
++              }}
++            >
++              {m.content}
++            </span>
++            {m.role === 'assistant' && sessionId && (
++              <div style={{ position: 'relative', display: 'inline-block', marginTop: 4, marginLeft: 8 }}>
++                <VoteFeedback.Root session_id={sessionId}>
++                  <VoteFeedback.UpvoteButton>
++                    <span aria-label="Helpful" style={{ fontSize: 16 }}>👍</span>
++                  </VoteFeedback.UpvoteButton>
++                  <VoteFeedback.DownvoteButton>
++                    <span aria-label="Not helpful" style={{ fontSize: 16 }}>👎</span>
++                  </VoteFeedback.DownvoteButton>
++                  <VoteFeedback.Popover
++                    style={{
++                      position: 'absolute',
++                      bottom: 'calc(100% + 8px)',
++                      left: 0,
++                      zIndex: 10,
++                      background: '#fff',
++                      border: '1px solid #ccc',
++                      borderRadius: 8,
++                      padding: 12,
++                      minWidth: 240,
++                    }}
++                  >
++                    <VoteFeedback.Textarea
++                      placeholder="What went wrong? (optional)"
++                      style={{ width: '100%', marginBottom: 8, borderRadius: 6, border: '1px solid #ccc', padding: '6px 8px' }}
++                    />
++                    <VoteFeedback.SubmitButton
++                      style={{ padding: '4px 12px', borderRadius: 6, background: '#0070f3', color: '#fff', border: 'none', cursor: 'pointer' }}
++                    >
++                      Submit
++                    </VoteFeedback.SubmitButton>
++                  </VoteFeedback.Popover>
++                </VoteFeedback.Root>
++              </div>
++            )}
++          </div>
++        ))}
++        {loading && <div style={{ color: '#888' }}>Thinking...</div>}
++      </div>
++
++      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
++        <input
++          value={input}
++          onChange={e => setInput(e.target.value)}
++          onKeyDown={e => e.key === 'Enter' && sendMessage()}
++          placeholder="Ask a question..."
++          style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid #ccc' }}
++        />
++        <button onClick={sendMessage} style={{ padding: '8px 16px', borderRadius: 8, background: '#0070f3', color: '#fff', border: 'none', cursor: 'pointer' }}>
++          Send
++        </button>
++      </div>
++    </div>
++  )
++}
+
+diff --git a/.env b/.env
+--- a/.env
++++ b/.env
++VITE_KELET_PUBLISHABLE_KEY=pk-kelet-test-456
++VITE_KELET_PROJECT=docs-ai-assistant
