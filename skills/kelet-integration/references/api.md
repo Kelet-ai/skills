@@ -82,7 +82,7 @@ Keys are self-describing by prefix: `sk-kelet-...` = secret · `pk-kelet-...` = 
 | Variable                            | Where             | What                                                            |
 | ----------------------------------- | ----------------- | --------------------------------------------------------------- |
 | `KELET_API_KEY`                     | Server            | Secret key — required; configure() raises ValueError if missing |
-| `KELET_PROJECT`                     | Server            | Project name — required; SDK throws at startup if missing       |
+| `KELET_PROJECT`                     | Server            | Project name — required; missing = silent routing to wrong project |
 | `KELET_API_URL`                     | Server (optional) | Custom endpoint (self-hosted)                                   |
 | `VITE_KELET_PUBLISHABLE_KEY`        | Vite frontend     | Publishable key for KeletProvider                               |
 | `NEXT_PUBLIC_KELET_PUBLISHABLE_KEY` | Next.js           | Same, Next.js convention                                        |
