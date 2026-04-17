@@ -13,7 +13,7 @@ Does the app have a new-conversation / reset / start-over concept?
 
 Is the candidate ID a stable user identifier (phone, email, user_id, device_id)?
 └─► Yes ──► ⚠️ It outlives sessions — generate kelet_session_id UUID per conversation
-            └─► Is it PII (phone, email)? → omit user_id= silently
+            └─► Is it PII (phone, email)? → omit user_id=, inform developer prominently
             └─► Non-PII (internal user ID, opaque UUID)? → wire as user_id=
 ```
 
