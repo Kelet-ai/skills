@@ -175,9 +175,9 @@
       "id": 5,
       "name": "expand-to-full-mode",
       "prompt": "I want to go deeper with Kelet — add more signals and get better coverage",
-      "app_description": "FastAPI + pydantic-ai. Already has kelet.configure() and agentic_session() wired. Plain HTML frontend, no React. Developer explicitly wants full mode: more signals, better failure coverage.",
+      "app_description": "FastAPI + pydantic-ai. Already has kelet.configure() and agentic_session() wired. No React frontend — server-only. Developer explicitly wants full mode: more signals, better failure coverage.",
       "repo": "../docs-ai",
-      "repo_branch": "without-kelet",
+      "repo_branch": "main",
       "expected_output": "Skill switches to full mode (developer explicitly asked). Should NOT re-do the basic setup (configure/session already done). Should propose additional signal layers appropriate for a non-React app: server-side coded signals for failure modes (tool errors, timeouts, retries if applicable), expanded synthetic evaluators beyond Task Completion. Should explain what each addition catches. Should NOT propose VoteFeedback or React since there's no React frontend.",
       "assertions": [
         {

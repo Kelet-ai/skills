@@ -1,0 +1,368 @@
+diff --git a/.env b/.env
+index existing..updated 100644
+--- a/.env
++++ b/.env
+@@ -1,5 +1,9 @@
+ DOCS_LLMS_URLS=https://kelet.ai/llms.txt
+ DOCS_AI_MODEL=bedrock:global.anthropic.claude-sonnet-4-6
+-RATE_LIMIT_MESSAGES_PER_HOUR=20
++RATE_LIMIT_MESSAGES_PER_WINDOW=20
+ SESSION_TTL_SECONDS=1800
++KELET_API_KEY=sk-kelet-...
++KELET_PROJECT=docs-ai-assistant
+diff --git a/frontend/.env b/frontend/.env
+new file mode 100644
+--- /dev/null
++++ b/frontend/.env
+@@ -0,0 +1,2 @@
++VITE_KELET_PUBLISHABLE_KEY=pk-kelet-...
++VITE_KELET_PROJECT=docs-ai-assistant
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..3b42887 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -3,6 +3,7 @@ import logging
+ from contextlib import asynccontextmanager
+ from typing import cast
+
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -15,6 +16,9 @@ from settings import settings
+
+ logger = logging.getLogger(__name__)
+
++# Initialize Kelet — reads KELET_API_KEY and KELET_PROJECT from environment
++kelet.configure()
++
+
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..2d4e228 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -3,6 +3,7 @@ import json
+ import logging
+ from typing import AsyncGenerator
+
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -20,6 +21,15 @@ logger = logging.getLogger(__name__)
+ router = APIRouter()
+
+
++def _count_turns(messages_json: str) -> int:
++    """Count completed assistant turns in the session history."""
++    try:
++        msgs = json.loads(messages_json)
++        return sum(1 for m in msgs if isinstance(m, dict) and m.get("role") == "model")
++    except Exception:
++        return 0
++
++
+ class ChatRequest(BaseModel):
+     message: str = Field(min_length=1, max_length=4000)
+     session_id: str | None = None
+@@ -32,31 +42,49 @@ async def _run_agent_stream(
+     message_history: list[ModelMessage],
+     session: ChatSession,
+     redis: Redis,
++    is_retry: bool = False,
+ ) -> AsyncGenerator[str, None]:
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        async with kelet.agentic_session(session_id=session.session_id):
++            # Emit retry signal when the user sends another message on an existing session
++            if is_retry:
++                await kelet.signal(
++                    "EVENT",
++                    "HUMAN",
++                    trigger_name="user-retry",
++                    score=0.0,
++                )
++
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
++        await kelet.signal(
++            "EVENT",
++            "LABEL",
++            session_id=session.session_id,
++            trigger_name="agent-stream-error",
++            score=0.0,
++        )
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+         return
+
+@@ -109,8 +137,12 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+
+     # Session resolve — auto-create on missing/expired (no 404)
+     session: ChatSession | None = None
++    is_retry = False
+     if body.session_id:
+         session = await get_session(redis, body.session_id)
++        if session is not None:
++            # User is continuing an existing session — count as retry if there's prior history
++            is_retry = _count_turns(session.history) > 0
+     if session is None:
+         session = await create_session(redis, settings.session_ttl_seconds)
+
+@@ -123,7 +155,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+     )
+
+     return StreamingResponse(
+-        _run_agent_stream(body.message, deps, message_history, session, redis),
++        _run_agent_stream(body.message, deps, message_history, session, redis, is_retry=is_retry),
+         media_type="text/event-stream",
+         headers={
+             "Cache-Control": "no-cache",
+diff --git a/src/agent/__init__.py b/src/agent/__init__.py
+index 2726ac7..d50128a 100644
+--- a/src/agent/__init__.py
++++ b/src/agent/__init__.py
+@@ -2,6 +2,7 @@
+ from dataclasses import dataclass
+ from pathlib import Path
+
++import kelet
+ from jinja2 import Environment, FileSystemLoader, Template
+ from pydantic_ai import Agent, RunContext
+ from pydantic_ai.settings import ModelSettings
+@@ -56,13 +57,22 @@ def _system_prompt(ctx: RunContext[DocsDeps]) -> str:
+
+
+ @chat_agent.tool
+-def search_docs(ctx: RunContext[DocsDeps], query: str) -> str:
++async def search_docs(ctx: RunContext[DocsDeps], query: str) -> str:
+     """Search documentation with BM25. Use when unsure which page covers the topic."""
+-    return ctx.deps.cache.search(query, top_k=3)
++    result = ctx.deps.cache.search(query, top_k=3)
++    found = bool(result and result.strip())
++    await kelet.signal(
++        "EVENT",
++        "LABEL",
++        trigger_name="tool-search-docs",
++        score=1.0 if found else 0.0,
++        metadata={"query": query, "found": found},
++    )
++    return result
+
+
+ @chat_agent.tool
+-def get_page(ctx: RunContext[DocsDeps], slug: str) -> str:
++async def get_page(ctx: RunContext[DocsDeps], slug: str) -> str:
+     """Get full content of a doc page by slug.
+     Slugs are the URL path without the domain and without the .md extension.
+     e.g. https://example.com/docs/concepts/overview.md -> 'docs/concepts/overview'
+@@ -70,4 +80,12 @@ def get_page(ctx: RunContext[DocsDeps], slug: str) -> str:
+     Use the index in your system prompt to identify the right slug.
+     """
+     content = ctx.deps.cache.get_page(slug)
++    found = content is not None
++    await kelet.signal(
++        "EVENT",
++        "LABEL",
++        trigger_name="tool-get-page",
++        score=1.0 if found else 0.0,
++        metadata={"slug": slug, "found": found},
++    )
+     return content if content else f"Page '{slug}' not found. Available slugs are listed in the docs index."
+diff --git a/frontend/package.json b/frontend/package.json
+new file mode 100644
+--- /dev/null
++++ b/frontend/package.json
+@@ -0,0 +1 @@
++{"name":"frontend","dependencies":{"react":"^18","react-dom":"^18","@kelet-ai/feedback-ui":"^1"},"devDependencies":{"vite":"^5","@vitejs/plugin-react":"^4","typescript":"^5"}}
+diff --git a/frontend/src/main.tsx b/frontend/src/main.tsx
+new file mode 100644
+--- /dev/null
++++ b/frontend/src/main.tsx
+@@ -0,0 +1,15 @@
++import React from 'react'
++import ReactDOM from 'react-dom/client'
++import { KeletProvider } from '@kelet-ai/feedback-ui'
++import App from './App'
++
++ReactDOM.createRoot(document.getElementById('root')!).render(
++  <React.StrictMode>
++    <KeletProvider
++      apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY}
++      project={import.meta.env.VITE_KELET_PROJECT}
++    >
++      <App />
++    </KeletProvider>
++  </React.StrictMode>
++)
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+new file mode 100644
+--- /dev/null
++++ b/frontend/src/App.tsx
+@@ -0,0 +1,127 @@
++import { useEffect, useState } from 'react'
++import { VoteFeedback, useKeletSignal } from '@kelet-ai/feedback-ui'
++import styles from './App.module.css'
++
++interface Message { role: 'user' | 'assistant'; content: string }
++
++function AssistantMessage({ content, sessionId }: { content: string; sessionId: string }) {
++  const sendSignal = useKeletSignal()
++  const [copied, setCopied] = useState(false)
++
++  const handleCopy = async () => {
++    try {
++      await navigator.clipboard.writeText(content)
++      setCopied(true)
++      setTimeout(() => setCopied(false), 1500)
++      if (sessionId) {
++        sendSignal({ session_id: sessionId, kind: 'EVENT', source: 'HUMAN', trigger_name: 'user-copy' })
++      }
++    } catch {
++      // clipboard API unavailable — ignore
++    }
++  }
++
++  return (
++    <div className={styles.assistantMessage}>
++      <span className={styles.messageContent}>{content}</span>
++      {sessionId && (
++        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem' }}>
++          <VoteFeedback.Root session_id={sessionId}>
++            <VoteFeedback.UpvoteButton asChild>
++              <button className={styles.iconBtn} aria-label="Helpful">▲</button>
++            </VoteFeedback.UpvoteButton>
++            <VoteFeedback.DownvoteButton asChild>
++              <button className={styles.iconBtn} aria-label="Not helpful">▼</button>
++            </VoteFeedback.DownvoteButton>
++            <VoteFeedback.Popover
++              style={{
++                position: 'absolute',
++                bottom: 'calc(100% + 8px)',
++                left: 0,
++                zIndex: 10,
++                background: '#1e2130',
++                border: '1px solid #2d3748',
++                borderRadius: '0.5rem',
++                padding: '0.75rem',
++                minWidth: 240,
++              }}
++            >
++              <VoteFeedback.Textarea
++                placeholder="What went wrong? (optional)"
++                style={{
++                  width: '100%',
++                  marginBottom: '0.5rem',
++                  background: '#0f1117',
++                  color: '#e2e8f0',
++                  border: '1px solid #2d3748',
++                  borderRadius: '0.25rem',
++                  padding: '0.375rem 0.5rem',
++                  fontSize: '0.875rem',
++                }}
++              />
++              <VoteFeedback.SubmitButton className={styles.sendBtn}>
++                Submit
++              </VoteFeedback.SubmitButton>
++            </VoteFeedback.Popover>
++          </VoteFeedback.Root>
++          <button className={styles.iconBtn} onClick={handleCopy} aria-label="Copy response">
++            {copied ? '✓' : '⎘'}
++          </button>
++        </div>
++      )}
++    </div>
++  )
++}
++
++export default function App() {
++  const [messages, setMessages] = useState<Message[]>([])
++  const [input, setInput] = useState('')
++  const [sessionId, setSessionId] = useState<string>('')
++  const sendSignal = useKeletSignal()
++
++  // Abandon signal: fire when tab/window closes mid-session
++  useEffect(() => {
++    const handleUnload = () => {
++      if (sessionId && messages.length > 0) {
++        sendSignal({ session_id: sessionId, kind: 'EVENT', source: 'HUMAN', trigger_name: 'user-abandon', score: 0.0 })
++      }
++    }
++    window.addEventListener('beforeunload', handleUnload)
++    return () => window.removeEventListener('beforeunload', handleUnload)
++  }, [sessionId, messages.length, sendSignal])
++
++  const send = async () => {
++    const res = await fetch('/api/chat', {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ message: input, session_id: sessionId })
++    })
++    const sid = res.headers.get('X-Session-ID')
++    if (sid) setSessionId(sid)
++    const data = await res.json()
++    setMessages(m => [...m, { role: 'user', content: input }, { role: 'assistant', content: data.response }])
++    setInput('')
++  }
++
++  return (
++    <div className={styles.chat}>
++      <div className={styles.messages}>
++        {messages.map((m, i) => (
++          m.role === 'user'
++            ? (
++              <div key={i} className={styles.userMessage}>
++                <span className={styles.messageContent}>{m.content}</span>
++              </div>
++            )
++            : (
++              <AssistantMessage key={i} content={m.content} sessionId={sessionId} />
++            )
++        ))}
++      </div>
++      <div className={styles.inputRow}>
++        <input className={styles.input} value={input} onChange={e => setInput(e.target.value)} />
++        <button className={styles.sendBtn} onClick={send}>Send</button>
++      </div>
++    </div>
++  )
++}

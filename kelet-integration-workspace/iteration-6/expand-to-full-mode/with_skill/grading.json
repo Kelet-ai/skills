@@ -1,0 +1,38 @@
+{
+  "run_id": "expand-to-full-mode-with_skill",
+  "eval_name": "expand-to-full-mode",
+  "config": "with_skill",
+  "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "no_repeat_basic_setup",
+      "text": "Does not re-add configure() or agentic_session() that are already correctly wired — skips already-done work. Fixing/improving existing wiring (e.g. removing unnecessary guards) is acceptable.",
+      "passed": true,
+      "evidence": "Transcript explicitly documents existing configure() and agentic_session() as already present; the agent moved configure() to module level and removed the unnecessary if-guard — an improvement, not a re-addition."
+    },
+    {
+      "id": "proposes_additional_signals",
+      "text": "Proposes at least one additional coded signal beyond what's already in place",
+      "passed": true,
+      "evidence": "Five new signals added: user-rate-limited (both endpoints), session-expired, session-turn-depth (METRIC), agent-stream-error, and user-retry replacing the weaker user-correction heuristic."
+    },
+    {
+      "id": "expands_synthetics",
+      "text": "Proposes more synthetic evaluators than the default Task Completion alone",
+      "passed": true,
+      "evidence": "Four synthetic evaluators proposed: Task Completion, RAG Faithfulness, Conversation Completeness, and Knowledge Retention — three beyond the default Task Completion."
+    },
+    {
+      "id": "no_votefeedback_no_react",
+      "text": "Does not propose adding a new React frontend or installing React from scratch — app has no React frontend. Extending an existing React setup if found in the repo is acceptable.",
+      "passed": true,
+      "evidence": "Transcript confirms 'Server-only, no frontend' and verification checklist notes 'No secret key in frontend (no React frontend)'; no VoteFeedback or React installation proposed anywhere in the diff or transcript."
+    },
+    {
+      "id": "explains_value",
+      "text": "Explains what each new signal or evaluator catches — not just lists them",
+      "passed": true,
+      "evidence": "Each signal has a dedicated rationale: user-rate-limited explains correlation with session patterns, session-expired explains context-loss failure mode, session-turn-depth explains it as a proxy for response quality, and each evaluator in the table has an explicit rationale column."
+    }
+  ]
+}
