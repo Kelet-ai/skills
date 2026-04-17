@@ -106,7 +106,7 @@ preset name in the deeplink; the platform auto-configures them. Custom evaluator
 
 ## Synthetic Deeplink Generation
 
-Base64url-encode the payload, then build `https://console.kelet.ai/<project>/synthetics/setup?deeplink=<encoded>` — substitute `<project>` with the project name confirmed in Checkpoint 2 (Batch 2).
+Base64url-encode the payload, then build `https://console.kelet.ai/<project>/synthetics/setup?deeplink=<encoded>` — substitute `<project>` with the project name confirmed in Checkpoint 2.
 
 **MUST EXECUTE this with the Bash tool** — never show as a code block for the user to copy:
 

@@ -47,7 +47,7 @@ Feedback signals?
 ## Implementation Steps
 
 1. **API keys** — collected in Batch 2; do NOT ask again. Detect config pattern,
-   write to correct file. Always write `KELET_PROJECT` — SDK throws at startup if missing.
+   write to correct file. Always write `KELET_PROJECT` — missing = silent routing to wrong project, no error raised.
 2. **Install** — detect package manager from lockfiles (`uv.lock`→uv, `poetry.lock`→poetry, `Pipfile`→pipenv, else pip;
    `bun.lockb`→bun, `pnpm-lock.yaml`→pnpm, `yarn.lock`→yarn, else npm).
    Python: `kelet`; extras only if needed (`kelet[google-adk]`, `kelet[openai]`, `kelet[anthropic]`, `kelet[langchain]`, `kelet[all]`).
