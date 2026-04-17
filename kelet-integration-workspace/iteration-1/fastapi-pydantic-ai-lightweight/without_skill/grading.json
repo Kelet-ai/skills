@@ -1,0 +1,61 @@
+{
+  "run_id": "fastapi-pydantic-ai-lightweight-without_skill",
+  "eval_name": "fastapi-pydantic-ai-lightweight",
+  "config": "without_skill",
+  "expectations": [
+    {
+      "id": "installs_kelet",
+      "text": "Adds kelet to pyproject.toml or requirements",
+      "passed": true,
+      "evidence": "kelet>=1.3.0 was already in pyproject.toml (pre-existing). Transcript confirms this was detected. Dependency satisfied even without skill."
+    },
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() is called at startup (not per-request)",
+      "passed": true,
+      "evidence": "changes.diff shows `kelet.configure(api_key=settings.kelet_api_key, project=settings.kelet_project)` at module level \u2014 not per-request. The `if settings.kelet_api_key:` guard is a style choice; configure() is correctly placed at startup."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps the agent call with the existing Redis session_id",
+      "passed": true,
+      "evidence": "changes.diff shows `async with kelet.agentic_session(session_id=session.session_id, user_id=user_id):` wrapping agent call. session.session_id (the Redis UUID) is correctly used."
+    },
+    {
+      "id": "no_voteback_no_react",
+      "text": "Does not add VoteFeedback or React (app has no React frontend)",
+      "passed": true,
+      "evidence": "Transcript notes 'Plain HTML frontend; no React/JS changes attempted' and no VoteFeedback added. Diff contains no React or VoteFeedback references."
+    },
+    {
+      "id": "keys_in_env",
+      "text": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)",
+      "passed": false,
+      "evidence": "No .env file changes in changes.diff. Transcript section 'Step 4: Problems' notes 'No env var instructions \u2014 Did not add instructions for setting KELET_API_KEY on Fly.io'. Keys are referenced via existing Settings fields but no .env was written."
+    },
+    {
+      "id": "question_budget",
+      "text": "AskUserQuestion called at most 3 times total",
+      "passed": true,
+      "evidence": "questions_asked.md states 'No questions were asked.' Zero AskUserQuestion calls \u2014 well within budget (though zero is arguably worse than 2 for UX quality)."
+    },
+    {
+      "id": "lightweight_mode",
+      "text": "Integration is lightweight \u2014 does not add unnecessary signals or complexity",
+      "passed": false,
+      "evidence": "Without_skill run added a phone_number field to ChatRequest (speculative, not requested), a user_id param, and wrapped the stateless GET /chat endpoint with a random UUID session (transcript notes this is 'likely incorrect'). Added unnecessary complexity beyond the minimal integration."
+    },
+    {
+      "id": "deeplink_generated",
+      "text": "Synthetic evaluator deeplink is generated via Bash execution",
+      "passed": false,
+      "evidence": "No deeplink.txt found in without_skill outputs. Transcript explicitly states 'Synthetic signals / evaluators \u2014 No knowledge of this feature; not implemented.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 3,
+    "total": 8,
+    "pass_rate": 0.625
+  }
+}

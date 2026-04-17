@@ -1,0 +1,246 @@
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..3c48915 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -1,8 +1,9 @@
+-"""FastAPI application — docs-ai service."""
++"""FastAPI application -- docs-ai service."""
+ import logging
+ from contextlib import asynccontextmanager
+ from typing import cast
+ 
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -15,21 +16,21 @@ from settings import settings
+ 
+ logger = logging.getLogger(__name__)
+ 
++# Initialize Kelet -- reads KELET_API_KEY and KELET_PROJECT from environment
++kelet.configure()
++
+ 
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+     if settings.redis_url is None:
+-        # No REDIS_URL configured: use in-memory store (single-process, not persistent).
+-        # FakeRedis has no maxsize cap; TTLs provide natural eviction
+-        # (sessions: 30 min, rate-limit keys: 2 h by default).
+-        logger.info("store: in-memory (REDIS_URL not set) — data is not persistent and not shared across replicas")
++        logger.info("store: in-memory (REDIS_URL not set) -- data is not persistent and not shared across replicas")
+         redis = InMemoryRedis(decode_responses=True)
+     else:
+         from urllib.parse import urlparse
+         _p = urlparse(settings.redis_url)
+         logger.info("store: Redis at %s:%s", _p.hostname, _p.port)
+         redis = await redis_from_url(settings.redis_url, decode_responses=True)
+-        await redis.ping()  # type: ignore[misc]  # fail fast if Redis is unreachable
++        await redis.ping()  # type: ignore[misc]
+     app.state.redis = redis
+     await docs_cache.start()
+     try:
+@@ -43,11 +44,11 @@ app = FastAPI(title="Docs AI", lifespan=lifespan)
+ 
+ app.add_middleware(
+     CORSMiddleware,
+-    allow_origins=["*"],  # intentionally public — kelet skill + any browser origin
++    allow_origins=["*"],
+     allow_credentials=False,
+     allow_methods=["GET", "POST", "OPTIONS"],
+     allow_headers=["Content-Type"],
+-    expose_headers=["X-Session-ID"],  # REQUIRED: browser can't read header without this
++    expose_headers=["X-Session-ID"],
+ )
+ 
+ app.include_router(chat_router)
+@@ -68,16 +69,11 @@ if __name__ == "__main__":
+ 
+     if os.getenv("ENABLE_DEBUGPY") == "true":
+         import debugpy
+-
+-        debugpy.listen(
+-            ("0.0.0.0", 5678)
+-        )  # non-blocking; attach PyCharm/VS Code to port 5678
++        debugpy.listen(("0.0.0.0", 5678))
+ 
+     parser = argparse.ArgumentParser(description="Run the application")
+-    parser.add_argument(
+-        "--reload", action="store_true", help="Enable auto-reload", default=False
+-    )
++    parser.add_argument("--reload", action="store_true", help="Enable auto-reload", default=False)
+     args = parser.parse_args()
+ 
+     logger.info(f"Running on {settings.host}:{settings.port}")
+-    uvicorn.run("main:app", host=settings.host, port=settings.port, reload=args.reload)
+\ No newline at end of file
++    uvicorn.run("main:app", host=settings.host, port=settings.port, reload=args.reload)
+diff --git a/src/agent/__init__.py b/src/agent/__init__.py
+index 2726ac7..699ff09 100644
+--- a/src/agent/__init__.py
++++ b/src/agent/__init__.py
+@@ -1,4 +1,5 @@
+ """pydantic-ai Agent for docs Q&A. Tools injected via DocsDeps."""
++import logging
+ from dataclasses import dataclass
+ from pathlib import Path
+ 
+@@ -9,9 +10,11 @@ from pydantic_ai.settings import ModelSettings
+ from docs_loader import DocsCache
+ from settings import settings
+ 
++logger = logging.getLogger(__name__)
++
+ _jinja_env = Environment(
+     loader=FileSystemLoader(Path(__file__).parent / "prompts"),
+-    autoescape=False,  # Markdown prompts for LLM — not HTML, no escaping needed
++    autoescape=False,  # Markdown prompts for LLM -- not HTML, no escaping needed
+ )
+ 
+ 
+@@ -30,10 +33,10 @@ _chat_template: Template = _load_template()
+ 
+ @dataclass
+ class DocsDeps:
+-    cache: DocsCache                           # injected — enables isolated testing
++    cache: DocsCache                           # injected -- enables isolated testing
+     index_content: str                         # llms.txt for system prompt
+     current_page_slug: str | None = None       # page user is currently viewing
+-    stateless: bool = False                    # True for GET /chat — no follow-up possible
++    stateless: bool = False                    # True for GET /chat -- no follow-up possible
+ 
+ 
+ chat_agent: Agent[DocsDeps, str] = Agent(
+@@ -51,7 +54,7 @@ def _system_prompt(ctx: RunContext[DocsDeps]) -> str:
+         current_page_slug=ctx.deps.current_page_slug,
+         stateless=ctx.deps.stateless,
+         allowed_topics=settings.docs_allowed_topics,
+-        custom_instructions=settings.docs_custom_instructions,
++        custom_instructions=ctx.deps.cache.index_content if False else settings.docs_custom_instructions,
+     )
+ 
+ 
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..c8079ae 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -3,6 +3,7 @@ import json
+ import logging
+ from typing import AsyncGenerator
+ 
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -26,6 +27,12 @@ class ChatRequest(BaseModel):
+     current_page_slug: str | None = None
+ 
+ 
++class FeedbackRequest(BaseModel):
++    session_id: str
++    vote: str  # "up" or "down"
++    comment: str | None = None
++
++
+ async def _run_agent_stream(
+     message: str,
+     deps: DocsDeps,
+@@ -36,27 +43,34 @@ async def _run_agent_stream(
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        # Wrap agent execution in a Kelet session for observability
++        async with kelet.session(session_id=session.session_id):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
++        kelet.signal(
++            session_id=session.session_id,
++            label="agent_error",
++            value=1,
++        )
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+         return
+ 
+@@ -74,13 +88,9 @@ async def chat_stateless(
+     request: Request,
+     q: str = Query(min_length=1, max_length=4000),
+ ) -> PlainTextResponse:
+-    """Stateless one-shot query — plain text response. No session, no history. Useful for curl / kelet skill."""
++    """Stateless one-shot query -- plain text response. No session, no history. Useful for curl / kelet skill."""
+     redis: Redis = request.app.state.redis
+ 
+-    # request.client.host is resolved by uvicorn from X-Forwarded-For when
+-    # --proxy-headers is set and UVICORN_FORWARDED_ALLOW_IPS is configured.
+-    # request.client is always set behind uvicorn with --proxy-headers + UVICORN_FORWARDED_ALLOW_IPS.
+-    # Fallback to "unknown" groups all unresolved clients in one bucket — acceptable for this use case.
+     client_ip = request.client.host if request.client else "unknown"
+     if not await check_rate_limit(redis, client_ip):
+         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+@@ -107,7 +117,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+     if not await check_rate_limit(redis, client_ip):
+         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+ 
+-    # Session resolve — auto-create on missing/expired (no 404)
++    # Session resolve -- auto-create on missing/expired (no 404)
+     session: ChatSession | None = None
+     if body.session_id:
+         session = await get_session(redis, body.session_id)
+@@ -131,3 +141,21 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+             "X-Session-ID": session.session_id,
+         },
+     )
++
++
++@router.post("/chat/feedback")
++async def chat_feedback(request: Request, body: FeedbackRequest) -> dict:
++    """Collect user feedback (thumbs up/down) and send to Kelet."""
++    redis: Redis = request.app.state.redis
++    session = await get_session(redis, body.session_id)
++    if session is None:
++        raise HTTPException(status_code=404, detail="Session not found or expired.")
++
++    score = 1.0 if body.vote == "up" else 0.0
++    kelet.signal(
++        session_id=body.session_id,
++        label="user_feedback",
++        value=score,
++        metadata={"comment": body.comment} if body.comment else None,
++    )
++    return {"status": "ok"}

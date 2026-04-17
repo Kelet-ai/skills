@@ -1,0 +1,37 @@
+{
+  "run_id": "session-id-boundary-check-with_skill",
+  "eval_name": "session-id-boundary-check",
+  "config": "with_skill",
+  "expectations": [
+    {
+      "id": "detects_session_mismatch",
+      "text": "Surfaces the issue that phone number outlives sessions and cannot be used as session_id",
+      "passed": true,
+      "evidence": "session_handling.md documents the mismatch detection in detail. Transcript states 'Mismatch flagged: phone outlives sessions; should be user_id= not session_id'. Checkpoint 1 question explicitly surfaces this: 'Your app already generates a UUID per conversation \u2014 phone number should be passed as user_id so Kelet can correlate sessions across conversations for the same user.'"
+    },
+    {
+      "id": "proposes_uuid_fix",
+      "text": "Proposes generating a UUID per conversation (not using phone as session_id)",
+      "passed": true,
+      "evidence": "session_handling.md confirms the app already generates UUIDs correctly via create_session(). The fix proposed is to keep UUID as session_id (already correct) and add phone_number as user_id. Transcript confirms this approach explicitly."
+    },
+    {
+      "id": "uses_user_id_param",
+      "text": "Passes stable identifier (phone) as user_id= in agentic_session()",
+      "passed": true,
+      "evidence": "changes.diff shows `kelet.agentic_session(session_id=session.session_id, user_id=user_id)` with `phone_number: str | None = None` added to ChatRequest and `user_id=body.phone_number` passed through. Phone number correctly wired as user_id."
+    },
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() is still added at startup",
+      "passed": true,
+      "evidence": "changes.diff shows `kelet.configure()  # reads KELET_API_KEY + KELET_PROJECT from env` added at module level in app/main.py."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

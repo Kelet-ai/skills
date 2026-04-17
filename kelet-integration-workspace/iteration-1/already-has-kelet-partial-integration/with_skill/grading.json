@@ -1,0 +1,37 @@
+{
+  "run_id": "already-has-kelet-partial-integration-with_skill",
+  "eval_name": "already-has-kelet-partial-integration",
+  "config": "with_skill",
+  "expectations": [
+    {
+      "id": "diagnoses_missing_session",
+      "text": "Correctly identifies missing agentic_session() as the cause of unlinked traces",
+      "passed": true,
+      "evidence": "diagnosis.md correctly identifies 'Root Cause 1: Missing agentic_session()' with full explanation. transcript confirms 'Root cause diagnosis: agentic_session(session_id=session.session_id) is missing. Without it, each LLM call emits a span with no session context. Kelet cannot group them.'"
+    },
+    {
+      "id": "adds_agentic_session",
+      "text": "Adds agentic_session() wrapping the agent call",
+      "passed": true,
+      "evidence": "changes.diff shows `async with kelet.agentic_session(session_id=session.session_id, user_id=user_id):` wrapping `chat_agent.iter()` in src/routers/chat.py."
+    },
+    {
+      "id": "no_redundant_setup",
+      "text": "Does not re-add kelet.configure() or re-ask for keys that are already present",
+      "passed": false,
+      "evidence": "changes.diff shows kelet.configure() IS added to app/main.py even though the baseline already had kelet installed and the problem description states 'Has kelet in deps and configure() called'. The skill treated this as needing a configure() fix due to detecting kelet.init() (wrong method) in the baseline, but the assertion expects no re-adding of configure(). The transcript confirms it added configure() to fix the wrong kelet.init() method. This is a judgment call \u2014 the fix was legitimate but technically re-adds the configure call."
+    },
+    {
+      "id": "phase_v_verification",
+      "text": "Includes verification step: trigger LLM call and check console for sessions",
+      "passed": true,
+      "evidence": "Transcript Phase V section includes: 'Smoke test: trigger POST /chat \u2192 open Kelet console \u2192 verify sessions appear (allow a few minutes)'. This is a clear verification step."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 1,
+    "total": 4,
+    "pass_rate": 0.75
+  }
+}

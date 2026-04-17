@@ -1,0 +1,43 @@
+{
+  "run_id": "expand-to-full-mode-without_skill",
+  "eval_name": "expand-to-full-mode",
+  "config": "without_skill",
+  "summary": {
+    "passed": 4,
+    "failed": 1,
+    "total": 5,
+    "pass_rate": 0.8
+  },
+  "expectations": [
+    {
+      "id": "no_repeat_basic_setup",
+      "text": "Does not re-add configure() or agentic_session() — skips already-done work",
+      "passed": true,
+      "evidence": "Transcript 'Starting state (baseline)' acknowledges both kelet.configure() and kelet.agentic_session() are already present. Decisions section adds new signals on top without re-implementing the basics. changes.diff does not show configure() or agentic_session() being added — only new signals and the feedback endpoint."
+    },
+    {
+      "id": "proposes_additional_signals",
+      "text": "Proposes at least one additional coded signal beyond what's already in place",
+      "passed": true,
+      "evidence": "signals_added.md documents 6 signals: user_id threading to agentic_session, rate-limit signal, agent error signal, explicit user feedback endpoint, search no-results signal, and get-page not-found signal. All implemented in changes.diff."
+    },
+    {
+      "id": "expands_synthetics",
+      "text": "Proposes more synthetic evaluators than just Task Completion",
+      "passed": false,
+      "evidence": "No deeplink.txt in without_skill outputs. Transcript has no mention of synthetic evaluators or the Kelet console deeplink feature at all. Without the skill, there is no awareness of the synthetic evaluator setup workflow."
+    },
+    {
+      "id": "no_votefeedback_no_react",
+      "text": "Does not propose VoteFeedback or React since app has no React frontend",
+      "passed": true,
+      "evidence": "signals_added.md explicitly states: 'No React component possible (plain HTML), so a REST endpoint allows a simple native thumbs widget in the existing HTML frontend.' No VoteFeedback or React code in changes.diff."
+    },
+    {
+      "id": "explains_value",
+      "text": "Explains what each new signal or evaluator catches — not just lists them",
+      "passed": true,
+      "evidence": "signals_added.md has a 'Rationale:' section for each signal explaining the value (e.g. rate-limit: 'Rate-limit hits are a failure signal — they indicate frustrated users who are trying to use the product but being blocked'; search no-results: 'High no-results rate = docs don't cover what users ask'). Each entry explains the observable failure category."
+    }
+  ]
+}

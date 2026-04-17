@@ -1,0 +1,255 @@
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..3b42887 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -3,6 +3,7 @@ import logging
+ from contextlib import asynccontextmanager
+ from typing import cast
+
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -15,6 +16,9 @@ from settings import settings
+
+ logger = logging.getLogger(__name__)
+
++# Initialize Kelet — reads KELET_API_KEY and KELET_PROJECT from environment
++kelet.configure()
++
+
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..chat_final 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -3,6 +3,7 @@ import json
+ import logging
+ from typing import AsyncGenerator
+
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -36,27 +36,39 @@ async def _run_agent_stream(
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        async with kelet.agentic_session(session_id=session.session_id):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
++        await kelet.signal(
++            "EVENT",
++            "LABEL",
++            session_id=session.session_id,
++            trigger_name="agent-stream-error",
++            score=0.0,
++        )
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+         return
+
+diff --git a/frontend/package.json b/frontend/package.json
+index 1234567..abcdefg 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -1 +1 @@
+-{"name":"frontend","dependencies":{"react":"^18","react-dom":"^18"},"devDependencies":{"vite":"^5","@vitejs/plugin-react":"^4","typescript":"^5"}}
++{"name":"frontend","dependencies":{"react":"^18","react-dom":"^18","@kelet-ai/feedback-ui":"^1"},"devDependencies":{"vite":"^5","@vitejs/plugin-react":"^4","typescript":"^5"}}
+diff --git a/frontend/src/main.tsx b/frontend/src/main.tsx
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/frontend/src/main.tsx
+@@ -0,0 +1,15 @@
++import React from 'react'
++import ReactDOM from 'react-dom/client'
++import { KeletProvider } from '@kelet-ai/feedback-ui'
++import App from './App'
++
++ReactDOM.createRoot(document.getElementById('root')!).render(
++  <React.StrictMode>
++    <KeletProvider
++      apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY}
++      project={import.meta.env.VITE_KELET_PROJECT}
++    >
++      <App />
++    </KeletProvider>
++  </React.StrictMode>
++)
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+index prev_app..new_app 100644
+--- a/frontend/src/App.tsx
++++ b/frontend/src/App.tsx
+@@ -1,5 +1,6 @@
+ import { useState } from 'react'
++import { VoteFeedback } from '@kelet-ai/feedback-ui'
+ import styles from './App.module.css'
+
+ interface Message { role: 'user' | 'assistant'; content: string }
+
++function AssistantMessage({ content, sessionId }: { content: string; sessionId: string }) {
++  return (
++    <div className={styles.assistantMessage}>
++      <span className={styles.messageContent}>{content}</span>
++      {sessionId && (
++        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem' }}>
++          <VoteFeedback.Root session_id={sessionId}>
++            <VoteFeedback.UpvoteButton asChild>
++              <button className={styles.iconBtn} aria-label="Helpful">▲</button>
++            </VoteFeedback.UpvoteButton>
++            <VoteFeedback.DownvoteButton asChild>
++              <button className={styles.iconBtn} aria-label="Not helpful">▼</button>
++            </VoteFeedback.DownvoteButton>
++            <VoteFeedback.Popover
++              style={{
++                position: 'absolute',
++                bottom: 'calc(100% + 8px)',
++                left: 0,
++                zIndex: 10,
++                background: '#1e2130',
++                border: '1px solid #2d3748',
++                borderRadius: '0.5rem',
++                padding: '0.75rem',
++                minWidth: 240,
++              }}
++            >
++              <VoteFeedback.Textarea
++                placeholder="What went wrong? (optional)"
++                style={{
++                  width: '100%',
++                  marginBottom: '0.5rem',
++                  background: '#0f1117',
++                  color: '#e2e8f0',
++                  border: '1px solid #2d3748',
++                  borderRadius: '0.25rem',
++                  padding: '0.375rem 0.5rem',
++                  fontSize: '0.875rem',
++                }}
++              />
++              <VoteFeedback.SubmitButton className={styles.sendBtn}>
++                Submit
++              </VoteFeedback.SubmitButton>
++            </VoteFeedback.Popover>
++          </VoteFeedback.Root>
++        </div>
++      )}
++    </div>
++  )
++}
++
+ export default function App() {
+   const [messages, setMessages] = useState<Message[]>([])
+   const [input, setInput] = useState('')
+   const [sessionId, setSessionId] = useState<string>('')
+
+   const send = async () => {
+     const res = await fetch('/api/chat', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ message: input, session_id: sessionId })
+     })
+     const sid = res.headers.get('X-Session-ID')
+     if (sid) setSessionId(sid)
+     const data = await res.json()
+     setMessages(m => [...m, { role: 'user', content: input }, { role: 'assistant', content: data.response }])
+     setInput('')
+   }
+
+   return (
+     <div className={styles.chat}>
+       <div className={styles.messages}>
+         {messages.map((m, i) => (
+           m.role === 'user'
+             ? (
+               <div key={i} className={styles.userMessage}>
+                 <span className={styles.messageContent}>{m.content}</span>
+               </div>
+             )
+             : (
+-              <div key={i} className={styles.assistantMessage}>
+-                <span className={styles.messageContent}>{m.content}</span>
+-              </div>
++              <AssistantMessage key={i} content={m.content} sessionId={sessionId} />
+             )
+         ))}
+       </div>
+       <div className={styles.inputRow}>
+         <input className={styles.input} value={input} onChange={e => setInput(e.target.value)} />
+         <button className={styles.sendBtn} onClick={send}>Send</button>
+       </div>
+     </div>
+   )
+ }
+diff --git a/.env b/.env
+index prev_env..new_env 100644
+--- a/.env
++++ b/.env
+@@ -1,4 +1,8 @@
+ DOCS_LLMS_URLS=https://kelet.ai/llms.txt
+ DOCS_AI_MODEL=bedrock:global.anthropic.claude-sonnet-4-6
+ RATE_LIMIT_MESSAGES_PER_HOUR=20
+ SESSION_TTL_SECONDS=1800
++KELET_API_KEY=sk-kelet-...        # get at console.kelet.ai/api-keys
++KELET_PROJECT=docs-ai-assistant   # must match project created at console.kelet.ai
++VITE_KELET_PUBLISHABLE_KEY=pk-kelet-...  # get at console.kelet.ai/api-keys
++VITE_KELET_PROJECT=docs-ai-assistant
+diff --git a/k8s/charts/docs-ai/templates/deployment.yaml b/k8s/charts/docs-ai/templates/deployment.yaml
+index prev_deploy..new_deploy 100644
+--- a/k8s/charts/docs-ai/templates/deployment.yaml
++++ b/k8s/charts/docs-ai/templates/deployment.yaml
+@@ -90,6 +90,12 @@ spec:
+             - name: KELET_PROJECT
+               valueFrom:
+                 configMapKeyRef:
+                   name: {{ include "kelet-docs-ai.fullname" . }}-config
+                   key: KELET_PROJECT
+             - name: KELET_API_KEY
+               valueFrom:
+                 secretKeyRef:
+                   name: {{ .Values.secrets.keletSecretName }}
+                   key: KELET_API_KEY
+                   optional: true
++            - name: VITE_KELET_PUBLISHABLE_KEY
++              valueFrom:
++                secretKeyRef:
++                  name: {{ .Values.secrets.keletSecretName }}
++                  key: VITE_KELET_PUBLISHABLE_KEY
++                  optional: true

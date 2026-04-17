@@ -1,0 +1,226 @@
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -3,6 +3,7 @@
+ import logging
+ from typing import AsyncGenerator
+
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -20,6 +21,15 @@
+ router = APIRouter()
+
+
++def _count_turns(messages_json: str) -> int:
++    """Count completed assistant turns in the session history."""
++    try:
++        msgs = json.loads(messages_json)
++        return sum(1 for m in msgs if isinstance(m, dict) and m.get("role") == "model")
++    except Exception:
++        return 0
++
++
+ class ChatRequest(BaseModel):
+     message: str = Field(min_length=1, max_length=4000)
+     session_id: str | None = None
+@@ -32,31 +42,49 @@
+     message_history: list[ModelMessage],
+     session: ChatSession,
+     redis: Redis,
++    is_retry: bool = False,
+ ) -> AsyncGenerator[str, None]:
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        async with kelet.agentic_session(session_id=session.session_id):
++            # Emit retry signal when the user sends another message on an existing session
++            if is_retry:
++                await kelet.signal(
++                    "EVENT",
++                    "HUMAN",
++                    trigger_name="user-retry",
++                    score=0.0,
++                )
++
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
++        await kelet.signal(
++            "EVENT",
++            "LABEL",
++            session_id=session.session_id,
++            trigger_name="agent-stream-error",
++            score=0.0,
++        )
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+         return
+
+@@ -109,8 +137,12 @@
+
+     # Session resolve — auto-create on missing/expired (no 404)
+     session: ChatSession | None = None
++    is_retry = False
+     if body.session_id:
+         session = await get_session(redis, body.session_id)
++        if session is not None:
++            # User is continuing an existing session — count as retry if there's prior history
++            is_retry = _count_turns(session.history) > 0
+     if session is None:
+         session = await create_session(redis, settings.session_ttl_seconds)
+
+@@ -123,7 +155,7 @@
+     )
+
+     return StreamingResponse(
+-        _run_agent_stream(body.message, deps, message_history, session, redis),
++        _run_agent_stream(body.message, deps, message_history, session, redis, is_retry=is_retry),
+         media_type="text/event-stream",
+         headers={
+             "Cache-Control": "no-cache",
+--- a/src/agent/__init__.py
++++ b/src/agent/__init__.py
+@@ -2,6 +2,7 @@
+ from dataclasses import dataclass
+ from pathlib import Path
+
++import kelet
+ from jinja2 import Environment, FileSystemLoader, Template
+ from pydantic_ai import Agent, RunContext
+ from pydantic_ai.settings import ModelSettings
+@@ -56,13 +57,22 @@
+
+
+ @chat_agent.tool
+-def search_docs(ctx: RunContext[DocsDeps], query: str) -> str:
++async def search_docs(ctx: RunContext[DocsDeps], query: str) -> str:
+     """Search documentation with BM25. Use when unsure which page covers the topic."""
+-    return ctx.deps.cache.search(query, top_k=3)
++    result = ctx.deps.cache.search(query, top_k=3)
++    found = bool(result and result.strip())
++    await kelet.signal(
++        "EVENT",
++        "LABEL",
++        trigger_name="tool-search-docs",
++        score=1.0 if found else 0.0,
++        metadata={"query": query, "found": found},
++    )
++    return result
+
+
+ @chat_agent.tool
+-def get_page(ctx: RunContext[DocsDeps], slug: str) -> str:
++async def get_page(ctx: RunContext[DocsDeps], slug: str) -> str:
+     """Get full content of a doc page by slug.
+     Slugs are the URL path without the domain and without the .md extension.
+     e.g. https://example.com/docs/concepts/overview.md -> 'docs/concepts/overview'
+@@ -70,4 +80,12 @@
+     Use the index in your system prompt to identify the right slug.
+     """
+     content = ctx.deps.cache.get_page(slug)
++    found = content is not None
++    await kelet.signal(
++        "EVENT",
++        "LABEL",
++        trigger_name="tool-get-page",
++        score=1.0 if found else 0.0,
++        metadata={"slug": slug, "found": found},
++    )
+     return content if content else f"Page '{slug}' not found. Available slugs are listed in the docs index."
+--- a/frontend/src/App.tsx
++++ b/frontend/src/App.tsx
+@@ -1,10 +1,26 @@
+-import { useState } from 'react'
+-import { VoteFeedback } from '@kelet-ai/feedback-ui'
++import { useEffect, useState } from 'react'
++import { VoteFeedback, useKeletSignal } from '@kelet-ai/feedback-ui'
+ import styles from './App.module.css'
+
+ interface Message { role: 'user' | 'assistant'; content: string }
+
+ function AssistantMessage({ content, sessionId }: { content: string; sessionId: string }) {
++  const sendSignal = useKeletSignal()
++  const [copied, setCopied] = useState(false)
++
++  const handleCopy = async () => {
++    try {
++      await navigator.clipboard.writeText(content)
++      setCopied(true)
++      setTimeout(() => setCopied(false), 1500)
++      if (sessionId) {
++        sendSignal({ session_id: sessionId, kind: 'EVENT', source: 'HUMAN', trigger_name: 'user-copy' })
++      }
++    } catch {
++      // clipboard API unavailable — ignore
++    }
++  }
++
+   return (
+     <div className={styles.assistantMessage}>
+       <span className={styles.messageContent}>{content}</span>
+@@ -48,6 +64,9 @@
+               </VoteFeedback.SubmitButton>
+             </VoteFeedback.Popover>
+           </VoteFeedback.Root>
++          <button className={styles.iconBtn} onClick={handleCopy} aria-label="Copy response">
++            {copied ? '✓' : '⎘'}
++          </button>
+         </div>
+       )}
+     </div>
+@@ -58,7 +77,19 @@
+   const [messages, setMessages] = useState<Message[]>([])
+   const [input, setInput] = useState('')
+   const [sessionId, setSessionId] = useState<string>('')
++  const sendSignal = useKeletSignal()
+
++  // Abandon signal: fire when tab/window closes mid-session
++  useEffect(() => {
++    const handleUnload = () => {
++      if (sessionId && messages.length > 0) {
++        sendSignal({ session_id: sessionId, kind: 'EVENT', source: 'HUMAN', trigger_name: 'user-abandon', score: 0.0 })
++      }
++    }
++    window.addEventListener('beforeunload', handleUnload)
++    return () => window.removeEventListener('beforeunload', handleUnload)
++  }, [sessionId, messages.length, sendSignal])
++
+   const send = async () => {
+     const res = await fetch('/api/chat', {
+       method: 'POST',

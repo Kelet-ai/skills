@@ -1,0 +1,61 @@
+{
+  "run_id": "fastapi-pydantic-ai-lightweight-with_skill",
+  "eval_name": "fastapi-pydantic-ai-lightweight",
+  "config": "with_skill",
+  "expectations": [
+    {
+      "id": "installs_kelet",
+      "text": "Adds kelet to pyproject.toml or requirements",
+      "passed": true,
+      "evidence": "Transcript notes kelet>=1.3.0 was already in pyproject.toml; skill correctly detected and skipped install step. Dependency satisfied."
+    },
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() is called at startup (not per-request)",
+      "passed": true,
+      "evidence": "changes.diff shows `kelet.configure()` added at module level in app/main.py (line 19), outside any request handler."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps the agent call with the existing Redis session_id",
+      "passed": true,
+      "evidence": "changes.diff shows `async with kelet.agentic_session(session_id=session.session_id):` wrapping `chat_agent.iter()` in src/routers/chat.py."
+    },
+    {
+      "id": "no_voteback_no_react",
+      "text": "Does not add VoteFeedback or React (app has no React frontend)",
+      "passed": true,
+      "evidence": "Transcript explicitly notes 'No React frontend \u2192 no VoteFeedback, no useFeedbackState'. Signal analysis confirms 0 coded signals. No React or VoteFeedback references in diff."
+    },
+    {
+      "id": "keys_in_env",
+      "text": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)",
+      "passed": true,
+      "evidence": "Transcript lines 164-166 confirm .env updated with KELET_PROJECT=docs-ai-assistant and KELET_API_KEY=sk-kelet-test-123. settings/__init__.py had kelet_api_key/kelet_project fields removed (SDK reads env vars directly). Keys not hardcoded in source."
+    },
+    {
+      "id": "question_budget",
+      "text": "AskUserQuestion called at most 3 times total",
+      "passed": true,
+      "evidence": "questions_asked.md shows exactly 2 AskUserQuestion calls (Checkpoint 1 and Checkpoint 2). Well within the 3-max budget."
+    },
+    {
+      "id": "lightweight_mode",
+      "text": "Integration is lightweight \u2014 does not add unnecessary signals or complexity",
+      "passed": true,
+      "evidence": "Transcript: 'Coded signals: 0 (lightweight, no hooks to wire to)'. Changes limited to configure(), agentic_session(), and env vars. No unnecessary decorators, signal calls, or extra dependencies added."
+    },
+    {
+      "id": "deeplink_generated",
+      "text": "Synthetic evaluator deeplink is generated via Bash execution (not shown as copy-paste code block)",
+      "passed": true,
+      "evidence": "deeplink.txt contains a real https://console.kelet.ai/docs-ai-assistant/synthetics/setup?deeplink=<base64url> URL. Transcript states 'Deeplink generated (Bash)' and shows the URL directly (not as a code block). deeplink.txt confirms actual execution."
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "failed": 0,
+    "total": 8,
+    "pass_rate": 1.0
+  }
+}

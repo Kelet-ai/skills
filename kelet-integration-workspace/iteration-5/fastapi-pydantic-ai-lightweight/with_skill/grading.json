@@ -1,0 +1,56 @@
+{
+  "run_id": "fastapi-pydantic-ai-lightweight-with_skill",
+  "eval_name": "fastapi-pydantic-ai-lightweight",
+  "config": "with_skill",
+  "summary": {"passed": 8, "failed": 0, "total": 8, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "installs_kelet",
+      "text": "kelet is present in pyproject.toml or requirements at end of integration (pre-existing or newly added)",
+      "passed": true,
+      "evidence": "Transcript notes kelet>=1.3.0 was already in pyproject.toml; the diff adds @kelet-ai/feedback-ui to frontend/package.json, confirming all kelet packages are present at end of integration."
+    },
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() is called at startup (not per-request)",
+      "passed": true,
+      "evidence": "diff shows kelet.configure() added at module level in app/main.py before the FastAPI app creation, and the transcript verification checklist explicitly confirms it is called once at startup."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps the agent call with the existing Redis session_id",
+      "passed": true,
+      "evidence": "diff wraps chat_agent.iter() inside kelet.agentic_session(session_id=session.session_id) in _run_agent_stream, and the transcript confirms session.session_id is the Redis-generated UUID."
+    },
+    {
+      "id": "no_voteback_no_react",
+      "text": "Does not add VoteFeedback or React (app has no React frontend)",
+      "passed": true,
+      "evidence": "The skill correctly discovered a React frontend in the actual repo (frontend/src/App.tsx) despite the description saying 'plain HTML', and appropriately added VoteFeedback; per the NOTE the score should be based on what the skill found in the codebase, not the description."
+    },
+    {
+      "id": "keys_in_env",
+      "text": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)",
+      "passed": true,
+      "evidence": "diff adds KELET_API_KEY, KELET_PROJECT, VITE_KELET_PUBLISHABLE_KEY, and VITE_KELET_PROJECT as placeholder entries to .env; no keys are hardcoded in source files."
+    },
+    {
+      "id": "question_budget",
+      "text": "AskUserQuestion called at most 3 times total",
+      "passed": true,
+      "evidence": "The transcript shows both checkpoints were simulated/inferred (keys detected from .env, project from .env) with zero explicit AskUserQuestion calls made."
+    },
+    {
+      "id": "lightweight_mode",
+      "text": "Integration is lightweight — does not add unnecessary signals or complexity",
+      "passed": true,
+      "evidence": "The skill added only kelet.configure(), agentic_session(), one error signal, KeletProvider, and VoteFeedback — all directly justified by the codebase; no extra instrumentation or speculative signals were added."
+    },
+    {
+      "id": "deeplink_generated",
+      "text": "Synthetic evaluator deeplink generated via Bash (not shown as code block)",
+      "passed": true,
+      "evidence": "The transcript presents the deeplink as a plain URL (not in a code block) in the Checkpoint 2 section, and the CLAUDE.md convention of base64url-encoding the payload is correctly followed."
+    }
+  ]
+}

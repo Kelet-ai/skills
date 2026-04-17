@@ -1,0 +1,67 @@
+{
+  "run_id": "fastapi-pydantic-ai-with-react-ui-with_skill",
+  "eval_name": "fastapi-pydantic-ai-with-react-ui",
+  "config": "with_skill",
+  "summary": {
+    "passed": 8,
+    "failed": 1,
+    "total": 9,
+    "pass_rate": 0.889
+  },
+  "expectations": [
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() added at server startup",
+      "passed": true,
+      "evidence": "changes.diff NOTE section confirms kelet.configure() was already present in app/main.py on this branch — no backend changes were needed. The string 'kelet.configure(' appears in the diff file confirming its presence."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps agent call with session_id",
+      "passed": true,
+      "evidence": "changes.diff NOTE section confirms kelet.agentic_session() was already in place in src/routers/chat.py wrapping the agent stream. Transcript Phase 0a analysis confirms 'kelet.agentic_session(session_id=session.session_id) wrapping chat_agent.iter() — complete: session context spans the entire streaming generator'."
+    },
+    {
+      "id": "kelet_provider_added",
+      "text": "KeletProvider added at React root with publishable key",
+      "passed": true,
+      "evidence": "changes.diff shows KeletProvider imported and added in frontend/src/main.tsx with apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY} and project={import.meta.env.VITE_KELET_PROJECT}, wrapping App inside React.StrictMode."
+    },
+    {
+      "id": "votefeedback_added",
+      "text": "VoteFeedback component added next to AI message output (not a floating widget or separate page)",
+      "passed": true,
+      "evidence": "changes.diff shows VoteFeedback.Root with UpvoteButton (asChild), DownvoteButton (asChild), Popover, Textarea, and SubmitButton added inside AssistantMessage component in frontend/src/App.tsx — inline next to each assistant message, not a floating widget."
+    },
+    {
+      "id": "session_id_propagated",
+      "text": "Session ID from X-Session-ID header passed to VoteFeedback session_id prop",
+      "passed": true,
+      "evidence": "frontend_changes.md documents the full end-to-end flow: server returns X-Session-ID header, React captures it via res.headers.get('X-Session-ID') and stores in sessionId state, then VoteFeedback.Root receives session_id={sessionId}. changes.diff line 74 shows 'const sid = res.headers.get(X-Session-ID); if (sid) setSessionId(sid)' and line 18 shows 'VoteFeedback.Root session_id={sessionId}'."
+    },
+    {
+      "id": "both_keys_in_env",
+      "text": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY present in .env (pre-existing or added)?",
+      "passed": true,
+      "evidence": "changes.diff NOTE confirms '.env already contained KELET_API_KEY, KELET_PROJECT, VITE_KELET_PUBLISHABLE_KEY, and VITE_KELET_PROJECT'. frontend_changes.md line 84 confirms 'KELET_API_KEY + KELET_PROJECT + VITE_KELET_PUBLISHABLE_KEY + VITE_KELET_PROJECT already set'. Assertion allows pre-existing keys — both are present."
+    },
+    {
+      "id": "on_brand_ui",
+      "text": "VoteFeedback styled to match dark theme using existing CSS classes rather than arbitrary inline styles or emoji",
+      "passed": true,
+      "evidence": "Vote buttons use asChild pattern with className={styles.iconBtn} (existing CSS module class), SubmitButton uses className={styles.sendBtn} (existing class matching the main Send button). Popover uses inline styles that precisely match the app's dark-theme palette (#1e2130 background, #2d3748 border — same values defined in App.module.css). No emoji. The skill explicitly noted 'No emoji, no arbitrary inline styles' for the button layer, and the popover inline styles are theme-consistent, not arbitrary."
+    },
+    {
+      "id": "implicit_fe_signals",
+      "text": "Does transcript/frontend_changes.md propose useFeedbackState or useKeletSignal for at least one interaction beyond VoteFeedback?",
+      "passed": false,
+      "evidence": "Transcript signal analysis section explicitly states 'No copy button, no retry, no edit-in-place, no session reset button' and concludes 'VoteFeedback is the only viable coded signal'. No useFeedbackState or useKeletSignal was proposed for any additional interaction. The skill stopped at VoteFeedback without surfacing additional signal opportunities."
+    },
+    {
+      "id": "deeplink_generated",
+      "text": "deeplink.txt contains a real https://console.kelet.ai URL?",
+      "passed": true,
+      "evidence": "deeplink.txt contains 'https://console.kelet.ai/docs-ai-assistant/synthetics/setup?deeplink=eyJ1c2VfY2FzZSI6...' — a real console.kelet.ai URL with base64url-encoded payload for Task Completion and Sentiment Analysis evaluators. Transcript shows deeplink was generated via Bash execution (not a code block)."
+    }
+  ]
+}

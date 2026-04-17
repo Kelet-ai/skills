@@ -1,0 +1,62 @@
+{
+  "run_id": "fastapi-pydantic-ai-with-react-ui-with_skill",
+  "eval_name": "fastapi-pydantic-ai-with-react-ui",
+  "config": "with_skill",
+  "summary": {"passed": 9, "failed": 0, "total": 9, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() added at server startup",
+      "passed": true,
+      "evidence": "kelet.configure() added at module level in app/main.py (line 37 of diff), outside the lifespan context manager, reading KELET_API_KEY and KELET_PROJECT from env."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps agent call with session_id",
+      "passed": true,
+      "evidence": "async with kelet.agentic_session(session_id=session.session_id) wraps chat_agent.iter() in _run_agent_stream() in src/routers/chat.py."
+    },
+    {
+      "id": "kelet_provider_added",
+      "text": "KeletProvider added at React root with publishable key",
+      "passed": true,
+      "evidence": "KeletProvider wraps App in frontend/src/main.tsx with apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY} and project={import.meta.env.VITE_KELET_PROJECT}."
+    },
+    {
+      "id": "votefeedback_added",
+      "text": "VoteFeedback component added next to AI message output (not a floating widget or separate page)",
+      "passed": true,
+      "evidence": "VoteFeedback.Root is placed inside AssistantMessage component directly beneath the message content, inline with the chat message — not a floating overlay or separate page."
+    },
+    {
+      "id": "session_id_propagated",
+      "text": "Session ID from X-Session-ID response header is captured in React state and passed to VoteFeedback sessionId prop",
+      "passed": true,
+      "evidence": "res.headers.get('X-Session-ID') calls setSessionId(sid) in React state, and sessionId is passed as session_id={sessionId} to VoteFeedback.Root."
+    },
+    {
+      "id": "both_keys_in_env",
+      "text": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY are present in .env files at end of integration — secret key in server .env, publishable key in frontend/.env (either pre-existing or newly added). Neither hardcoded in source.",
+      "passed": true,
+      "evidence": "KELET_API_KEY added to root .env, VITE_KELET_PUBLISHABLE_KEY added to new frontend/.env; both use placeholder values (sk-kelet-... / pk-kelet-...), not hardcoded in source files."
+    },
+    {
+      "id": "on_brand_ui",
+      "text": "VoteFeedback is placed and configured to look natural in the chat UI — not a jarring out-of-place widget. Skill checks existing styles/theme and passes appropriate props or classnames.",
+      "passed": true,
+      "evidence": "Skill reads App.module.css and applies existing classes (iconBtn, sendBtn, assistantMessage) to VoteFeedback buttons; popover inline styles match the app's dark palette (#1e2130 background, #2d3748 borders, #e2e8f0 text)."
+    },
+    {
+      "id": "implicit_fe_signals",
+      "text": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback — e.g. useKeletSignal for copy-to-clipboard, retry, or abandon.",
+      "passed": true,
+      "evidence": "useKeletSignal is used for two additional signals: user-copy on copy button click and user-abandon on beforeunload event, both wired in frontend/src/App.tsx."
+    },
+    {
+      "id": "deeplink_generated",
+      "text": "Synthetic evaluator deeplink generated via Bash (not shown as code block)",
+      "passed": true,
+      "evidence": "Deeplink URL (https://console.kelet.ai/docs-ai-assistant/synthetics/setup?deeplink=...) presented inline in the transcript under 'Deeplink generated (Bash execution)' — not inside a code block."
+    }
+  ]
+}

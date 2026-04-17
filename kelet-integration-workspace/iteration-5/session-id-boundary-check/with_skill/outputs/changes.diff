@@ -1,0 +1,113 @@
+diff --git a/.env.example b/.env.example
+index 84e8ee7..kelet01 100644
+--- a/.env.example
++++ b/.env.example
+@@ -5,3 +5,8 @@ DOCS_AI_MODEL=bedrock:global.anthropic.claude-sonnet-4-6
+ RATE_LIMIT_MESSAGES_PER_WINDOW=20
+ RATE_LIMIT_WINDOW_SECONDS=3600
+ SESSION_TTL_SECONDS=1800
++# Kelet observability
++# Get your secret key at console.kelet.ai/api-keys (sk-kelet-...)
++KELET_API_KEY=sk-kelet-...
++# Create the project first at console.kelet.ai → top-nav → New Project
++KELET_PROJECT=docs_ai
+diff --git a/app/main.py b/app/main.py
+index without..kelet01 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -1,6 +1,9 @@
+ """FastAPI application — docs-ai service."""
+ import logging
+ from contextlib import asynccontextmanager
+-from typing import cast
+
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+@@ -12,6 +15,9 @@ from settings import settings
+
+ logger = logging.getLogger(__name__)
+
++# Initialize Kelet — reads KELET_API_KEY and KELET_PROJECT from environment
++kelet.configure()
++
+
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index without..kelet01 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -1,6 +1,7 @@
+ """Chat endpoints — POST /chat (session, SSE) and GET /chat (stateless, plain text)."""
+ import json
+ import logging
+ from typing import AsyncGenerator
+
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -30,7 +31,7 @@ async def _run_agent_stream(
+ ) -> AsyncGenerator[str, None]:
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
++        async with kelet.agentic_session(session_id=session.session_id):
++         async with chat_agent.iter(
+             message, deps=deps, message_history=message_history
+         ) as run:
+             async for node in run:
+@@ -55,6 +56,11 @@ async def _run_agent_stream(
+             if run.result is not None:
+                 messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
++        await kelet.signal(
++            "EVENT",
++            "LABEL",
++            session_id=session.session_id,
++            trigger_name="agent-stream-error",
++            score=0.0,
++        )
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+         return
+diff --git a/k8s/charts/docs-ai/templates/deployment.yaml b/k8s/charts/docs-ai/templates/deployment.yaml
+index without..kelet01 100644
+--- a/k8s/charts/docs-ai/templates/deployment.yaml
++++ b/k8s/charts/docs-ai/templates/deployment.yaml
+@@ -98,6 +98,20 @@ spec:
+               value: "rediss://$(REDIS_HOST):$(REDIS_PORT)"
+
++            # Kelet observability
++            - name: KELET_PROJECT
++              valueFrom:
++                configMapKeyRef:
++                  name: {{ include "kelet-docs-ai.fullname" . }}-config
++                  key: KELET_PROJECT
++            - name: KELET_API_KEY
++              valueFrom:
++                secretKeyRef:
++                  name: {{ .Values.secrets.keletSecretName }}
++                  key: KELET_API_KEY
++                  optional: true
+diff --git a/k8s/charts/docs-ai/values.yaml b/k8s/charts/docs-ai/values.yaml
+index without..kelet01 100644
+--- a/k8s/charts/docs-ai/values.yaml
++++ b/k8s/charts/docs-ai/values.yaml
+@@ -80,3 +80,8 @@ config:
+   keletProject: "docs_ai"
++
++secrets:
++  # Name of the Kubernetes Secret (created by the infra repo) that holds KELET_API_KEY.
++  # Must exist in the same namespace before the pod starts.
++  keletSecretName: "docs-ai-kelet"
+diff --git a/k8s/environments/prod.yaml b/k8s/environments/prod.yaml
+index without..kelet01 100644
+--- a/k8s/environments/prod.yaml
++++ b/k8s/environments/prod.yaml
+@@ -19,3 +19,4 @@ docs_ai:
+   config:
+     uvicornForwardedAllowIps: "*"
++    keletProject: "docs_ai_prod"

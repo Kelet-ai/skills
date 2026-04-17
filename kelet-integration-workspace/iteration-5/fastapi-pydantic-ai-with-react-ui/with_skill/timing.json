@@ -1,0 +1,13 @@
+{
+  "start_ts": 1776452000,
+  "end_ts": 1776452520,
+  "duration_seconds": 520,
+  "phases": {
+    "analysis_pass": 120,
+    "checkpoint_1": 30,
+    "signal_analysis": 60,
+    "checkpoint_2_deeplink": 40,
+    "implementation": 220,
+    "phase_v_verification": 50
+  }
+}

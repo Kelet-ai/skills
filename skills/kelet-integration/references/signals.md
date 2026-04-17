@@ -2,85 +2,51 @@
 
 ## Contents
 
-- [Signal Kinds](#signal-kinds) and [Sources](#signal-sources)
-- [Synthetic Signals: Platform vs Code](#synthetic-signals-platform-vs-code)
-- [Signal Brainstorming: 3–5 per flow](#signal-brainstorming-35-per-flow)
-- [Required Fields](#required-fields)
-- [Selecting Synthetic Evaluators](#selecting-synthetic-evaluators) — framework + preset list
+- [Signal Enums + Required Fields](#signal-enums--required-fields)
+- [Selecting Synthetic Evaluators](#selecting-synthetic-evaluators) — preset list
 - [Synthetic Deeplink Generation](#synthetic-deeplink-generation)
 - [Naming Conventions](#naming-conventions)
 
 ---
 
-## Signal Kinds
+## Signal Enums + Required Fields
 
-| Kind        | Use when                                                                |
-|-------------|-------------------------------------------------------------------------|
-| `FEEDBACK`  | User explicitly rates quality (thumbs up/down, star rating)             |
-| `EDIT`      | User modifies AI-generated content — implicit "this was wrong"          |
-| `EVENT`     | A notable action occurred (retry clicked, flow abandoned, feature used) |
-| `METRIC`    | A numeric quality measurement (score 0.0–1.0)                           |
-| `ARBITRARY` | Custom/untyped observation that doesn't fit above                       |
+`kind`: `FEEDBACK` (explicit rating) · `EDIT` (user modifies AI output) · `EVENT` (retry, abandon, copy) · `METRIC` (numeric score) · `ARBITRARY` (custom)
 
-## Signal Sources
+`source`: `HUMAN` (user action) · `LABEL` (human review process) · `SYNTHETIC` (automated — platform responsibility)
 
-| Source      | Use when                                         |
-|-------------|--------------------------------------------------|
-| `HUMAN`     | Signal came from a real user action              |
-| `LABEL`     | Signal came from a human labeling/review process |
-| `SYNTHETIC` | Automated signal — **see platform note below**   |
+Required: `kind`, `source`, and at least one of `session_id` or `trace_id` (auto-resolved from `agentic_session` context). `score` must be 0.0–1.0 if provided.
 
 ## Synthetic Signals: Platform vs Code
 
-**Synthetic signals are Kelet's responsibility, not the developer's.**
+Kelet already has the full trace: every LLM call, model response, tool invocations, latency, token counts, turn structure. That's enough information to evaluate most quality dimensions (task completion, relevance, faithfulness, hallucination, sentiment) without the developer writing a single line. Synthetic evaluators run on the platform against this trace data — no code, no deployment, cold-start included.
 
-For LLM-as-judge evaluators, heuristic checks, quality monitors:
-→ Direct the developer to `https://console.kelet.ai/<project>/synthetics`
-Kelet manages evaluators there on their behalf — no code required, cold-start solution included.
+**Default assumption: if Kelet can see it in the trace, it's a managed synthetic.** Only propose coded `source=SYNTHETIC` signals for information Kelet can't observe — e.g. a score from an external system, a domain-specific classifier running outside the LLM path, or a ground-truth comparison against a private dataset.
 
-Only write `source=SYNTHETIC` signal code if:
+Direct developers to `https://console.kelet.ai/<project>/synthetics` — Kelet manages evaluators there.
 
-1. Developer explicitly requests it, AND
-2. The platform genuinely cannot implement it (explain why, ask developer to confirm)
+Only write `source=SYNTHETIC` code if: (1) developer explicitly requests it AND (2) platform genuinely cannot implement it — explain why and ask developer to confirm.
 
-## Signal Brainstorming: 3–5 per flow
+## Signal Priority (highest diagnostic value first)
 
-Cap proposals at 5 per agentic flow. Prioritize by signal-to-noise:
-
-- **Highest value**: edit signals (user directly shows what was wrong) and explicit downvotes
-- **High value**: abandonment / retry events (strong implicit dissatisfaction signal)
-- **Medium value**: tool call failures, API errors (automated, low noise)
-- **Lower value**: generic page events (high noise, less specific to agent quality)
-
-For each proposal, state: what it captures → how it manifests → what failure it reveals to Kelet's RCA engine.
-
-## Required Fields
-
-- `kind` (required)
-- `source` (required)
-- `session_id` OR `trace_id` (at least one required — auto-resolved from `agentic_session` context if not passed
-  explicitly)
-- `trigger_name` (optional) — identifies what the signal represents; see naming conventions below
-- `score` (0.0–1.0 if provided)
-- `value` (optional) — text content: feedback text, edit diff, reasoning, etc.
-- `confidence` (0.0–1.0 if provided)
-- `metadata` (optional) — arbitrary dict for extra context
+1. Edit signals — user directly shows what was wrong
+2. Explicit downvotes
+3. Abandonment / retry — strong implicit dissatisfaction
+4. Tool call failures, API errors — automated, low noise
+5. Generic page events — high noise, least specific
 
 ---
 
 ## Selecting Synthetic Evaluators
 
-A synthetic evaluator is a tip that fires on every session. Kelet clusters sessions by signal patterns to find
-root causes. Good evaluators make the clusters sharp; bad ones add noise.
-
 **Core selection framework:**
 
 1. **One per failure category, no overlap.** Every agent fails in a finite set of ways. Map each failure mode
-   from Phase 0b to a category, then pick ONE evaluator per category. Two evaluators on the same category
+   from the signal analysis pass to a category, then pick ONE evaluator per category. Two evaluators on the same category
    (e.g. `Completeness` + `Relevance` + `Answer Relevancy`) multiply noise without adding information.
 
    | Category | What it measures | When it matters |
-            |----------|-----------------|-----------------|
+   |----------|-----------------|-----------------|
    | Comprehension | Did it understand what was asked? | Always |
    | Execution | Did it take the right actions? (retrieval, tool choice) | RAG, multi-tool |
    | Correctness | Is the output factually right? | RAG, knowledge agents |
@@ -140,12 +106,12 @@ preset name in the deeplink; the platform auto-configures them. Custom evaluator
 
 ## Synthetic Deeplink Generation
 
-Base64url-encode the payload, then build `https://console.kelet.ai/<project>/synthetics/setup?deeplink=<encoded>` — substitute `<project>` with the project name confirmed in Phase 0a (or as asked via `AskUserQuestion`).
+Base64url-encode the payload, then build `https://console.kelet.ai/<project>/synthetics/setup?deeplink=<encoded>` — substitute `<project>` with the project name confirmed in Checkpoint 2.
 
 **MUST EXECUTE this with the Bash tool** — never show as a code block for the user to copy:
 
 ```python
-python3 - c
+python3 -c \
 "import base64,json; project='<project>'; payload={'use_case':'<use_case>','ideas':[{'name':'<name>','evaluator_type':'llm','description':'<desc>'}]}; print(f'https://console.kelet.ai/{project}/synthetics/setup?deeplink='+base64.urlsafe_b64encode(json.dumps(payload,separators=(',',':')).encode()).rstrip(b'=').decode())"
 ```
 

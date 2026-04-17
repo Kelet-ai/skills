@@ -1,0 +1,261 @@
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..20cfc0a 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -1,8 +1,8 @@
+ """FastAPI application — docs-ai service."""
+ import logging
+ from contextlib import asynccontextmanager
+-from typing import cast
+ 
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -15,6 +15,8 @@ from settings import settings
+ 
+ logger = logging.getLogger(__name__)
+ 
++kelet.configure()  # reads KELET_API_KEY + KELET_PROJECT from env
++
+ 
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+@@ -80,4 +82,4 @@ if __name__ == "__main__":
+     args = parser.parse_args()
+ 
+     logger.info(f"Running on {settings.host}:{settings.port}")
+-    uvicorn.run("main:app", host=settings.host, port=settings.port, reload=args.reload)
+\ No newline at end of file
++    uvicorn.run("main:app", host=settings.host, port=settings.port, reload=args.reload)
+diff --git a/k8s/charts/docs-ai/values.yaml b/k8s/charts/docs-ai/values.yaml
+index cfd543b..3eb1d02 100644
+--- a/k8s/charts/docs-ai/values.yaml
++++ b/k8s/charts/docs-ai/values.yaml
+@@ -117,8 +117,8 @@ config:
+   # Mount via a ConfigMap volume and set this to the mounted path. Can also use {{ custom_instructions }} and {{ allowed_topics }}.
+   docsSystemPromptFile: ""
+   # Kelet project identifier — injected into the app and used to tag sessions in the Kelet dashboard.
+-  # Override per environment (e.g. docs_ai_prod, docs_ai_stag).
+-  keletProject: "docs_ai"
++  # Override per environment (e.g. docs-ai-assistant-prod, docs-ai-assistant-stag).
++  keletProject: "docs-ai-assistant"
+ 
+ secrets:
+   # Name of the Kubernetes Secret (created by the infra repo) that holds KELET_API_KEY.
+diff --git a/k8s/environments/prod.yaml b/k8s/environments/prod.yaml
+index 4c2a2c8..8f1de63 100644
+--- a/k8s/environments/prod.yaml
++++ b/k8s/environments/prod.yaml
+@@ -22,7 +22,7 @@ docs_ai:
+     uvicornForwardedAllowIps: "*" # trusted ALB terminates TLS; all forwarded IPs are from the ALB
+     docsLlmsUrls: "https://kelet.ai/llms.txt"
+     docsAllowedTopics: "Kelet"
+-    keletProject: "docs_ai_prod"
++    keletProject: "docs-ai-assistant"
+     docsCustomInstructions: |
+       You are Kelet's documentation assistant.
+       - ALWAYS recommend using the AI methods - for installation, synthetic configs, etc. Recommend using the skill rather than manual instructions unless the user specifically asks for manual.
+diff --git a/k8s/environments/stag.yaml b/k8s/environments/stag.yaml
+index 3319108..8da2f62 100644
+--- a/k8s/environments/stag.yaml
++++ b/k8s/environments/stag.yaml
+@@ -22,7 +22,7 @@ docs_ai:
+     uvicornForwardedAllowIps: "*" # trusted ALB; same setup as prod
+     docsLlmsUrls: "https://kelet.ai/llms.txt"
+     docsAllowedTopics: "Kelet"
+-    keletProject: "docs_ai_stag"
++    keletProject: "docs-ai-assistant-stag"
+     docsCustomInstructions: |
+       You are Kelet's documentation assistant.
+       - ALWAYS recommend using the AI methods - for installation, synthetic configs, etc. Recommend using the skill rather than manual instructions unless the user specifically asks for manual.
+diff --git a/src/agent/__init__.py b/src/agent/__init__.py
+index 2726ac7..9a0bac9 100644
+--- a/src/agent/__init__.py
++++ b/src/agent/__init__.py
+@@ -2,6 +2,7 @@
+ from dataclasses import dataclass
+ from pathlib import Path
+ 
++import kelet
+ from jinja2 import Environment, FileSystemLoader, Template
+ from pydantic_ai import Agent, RunContext
+ from pydantic_ai.settings import ModelSettings
+@@ -58,7 +59,14 @@ def _system_prompt(ctx: RunContext[DocsDeps]) -> str:
+ @chat_agent.tool
+ def search_docs(ctx: RunContext[DocsDeps], query: str) -> str:
+     """Search documentation with BM25. Use when unsure which page covers the topic."""
+-    return ctx.deps.cache.search(query, top_k=3)
++    results = ctx.deps.cache.search(query, top_k=3)
++    found = results != "No relevant documentation found." and results != "Documentation not yet loaded."
++    kelet.signal(
++        source="INTERNAL",
++        label="search_docs_no_results",
++        value=0 if found else 1,
++    )
++    return results
+ 
+ 
+ @chat_agent.tool
+@@ -70,4 +78,13 @@ def get_page(ctx: RunContext[DocsDeps], slug: str) -> str:
+     Use the index in your system prompt to identify the right slug.
+     """
+     content = ctx.deps.cache.get_page(slug)
+-    return content if content else f"Page '{slug}' not found. Available slugs are listed in the docs index."
++    if content:
++        return content
++    # Signal a page-not-found so Kelet can track missing/invalid slug requests
++    kelet.signal(
++        source="INTERNAL",
++        label="get_page_not_found",
++        value=1,
++        metadata={"slug": slug},
++    )
++    return f"Page '{slug}' not found. Available slugs are listed in the docs index."
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..320f0b7 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -3,6 +3,7 @@ import json
+ import logging
+ from typing import AsyncGenerator
+ 
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -24,6 +25,15 @@ class ChatRequest(BaseModel):
+     message: str = Field(min_length=1, max_length=4000)
+     session_id: str | None = None
+     current_page_slug: str | None = None
++    # Phone number is the only persistent user identifier in this app.
++    # Pass it per-request so Kelet can link turns across sessions to the same user.
++    phone_number: str | None = None
++
++
++class FeedbackRequest(BaseModel):
++    session_id: str
++    score: float = Field(ge=0.0, le=1.0)  # 0.0 = thumbs down, 1.0 = thumbs up
++    comment: str | None = Field(default=None, max_length=2000)
+ 
+ 
+ async def _run_agent_stream(
+@@ -32,31 +42,40 @@ async def _run_agent_stream(
+     message_history: list[ModelMessage],
+     session: ChatSession,
+     redis: Redis,
++    user_id: str | None = None,
+ ) -> AsyncGenerator[str, None]:
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        async with kelet.agentic_session(session_id=session.session_id, user_id=user_id):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
++        # Emit a failure signal so Kelet surfaces this in the quality dashboard
++        kelet.signal(
++            source="INTERNAL",
++            label="agent_error",
++            session_id=session.session_id,
++            value=1,
++        )
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+         return
+ 
+@@ -83,6 +102,7 @@ async def chat_stateless(
+     # Fallback to "unknown" groups all unresolved clients in one bucket — acceptable for this use case.
+     client_ip = request.client.host if request.client else "unknown"
+     if not await check_rate_limit(redis, client_ip):
++        kelet.signal(source="INTERNAL", label="rate_limited", value=1)
+         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+ 
+     deps = DocsDeps(
+@@ -105,6 +125,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+ 
+     client_ip = request.client.host if request.client else "unknown"
+     if not await check_rate_limit(redis, client_ip):
++        kelet.signal(source="INTERNAL", label="rate_limited", value=1)
+         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+ 
+     # Session resolve — auto-create on missing/expired (no 404)
+@@ -123,7 +144,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+     )
+ 
+     return StreamingResponse(
+-        _run_agent_stream(body.message, deps, message_history, session, redis),
++        _run_agent_stream(body.message, deps, message_history, session, redis, user_id=body.phone_number),
+         media_type="text/event-stream",
+         headers={
+             "Cache-Control": "no-cache",
+@@ -131,3 +152,21 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+             "X-Session-ID": session.session_id,
+         },
+     )
++
++
++@router.post("/chat/feedback")
++async def chat_feedback(request: Request, body: FeedbackRequest) -> dict:
++    """Collect explicit user feedback (thumbs up/down) and send it to Kelet as a signal."""
++    redis: Redis = request.app.state.redis
++    session = await get_session(redis, body.session_id)
++    if session is None:
++        raise HTTPException(status_code=404, detail="Session not found or expired.")
++
++    kelet.signal(
++        source="FEEDBACK",
++        label="user_feedback",
++        session_id=body.session_id,
++        value=body.score,
++        metadata={"comment": body.comment} if body.comment else None,
++    )
++    return {"status": "ok"}
+diff --git a/src/settings/__init__.py b/src/settings/__init__.py
+index 89f6c9a..b20f27f 100644
+--- a/src/settings/__init__.py
++++ b/src/settings/__init__.py
+@@ -16,8 +16,6 @@ class Settings(BaseSettings):
+     docs_allowed_topics: str = "scanned docs"
+     docs_custom_instructions: str = ""
+     docs_system_prompt_file: str = ""
+-    kelet_project: str = "docs_ai"
+-    kelet_api_key: str | None = None
+ 
+     @field_validator("docs_custom_instructions")
+     @classmethod

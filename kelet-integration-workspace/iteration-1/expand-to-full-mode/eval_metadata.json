@@ -1,0 +1,33 @@
+{
+  "eval_id": 5,
+  "eval_name": "expand-to-full-mode",
+  "prompt": "I want to go deeper with Kelet — add more signals and get better coverage",
+  "app_description": "FastAPI + pydantic-ai. Already has kelet.configure() and agentic_session() wired. Plain HTML frontend, no React. Developer explicitly wants full mode: more signals, better failure coverage.",
+  "assertions": [
+    {
+      "id": "no_repeat_basic_setup",
+      "description": "Does not re-add configure() or agentic_session() — skips already-done work",
+      "type": "llm"
+    },
+    {
+      "id": "proposes_additional_signals",
+      "description": "Proposes at least one additional coded signal beyond what's already in place (e.g. server-side event for errors, retries, or abandonment)",
+      "type": "llm"
+    },
+    {
+      "id": "expands_synthetics",
+      "description": "Proposes more synthetic evaluators than the default Task Completion (e.g. Sentiment Analysis, Conversation Completeness, or role-specific ones)",
+      "type": "llm"
+    },
+    {
+      "id": "no_votefeedback_no_react",
+      "description": "Does not propose VoteFeedback or React since app has no React frontend",
+      "type": "llm"
+    },
+    {
+      "id": "explains_value",
+      "description": "Explains what each new signal or evaluator catches — not just lists them",
+      "type": "llm"
+    }
+  ]
+}

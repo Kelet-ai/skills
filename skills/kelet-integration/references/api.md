@@ -2,11 +2,11 @@
 
 ## Package Names
 
-| Stack                | Package                                                                                          |
-|----------------------|--------------------------------------------------------------------------------------------------|
-| Python               | `kelet` — no extras needed; auto-instruments all supported frameworks                            |
-| TypeScript / Node.js | `kelet @opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http` |
-| React frontend       | `@kelet-ai/feedback-ui`                                                                          |
+| Stack                | Package                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Python               | `kelet` — optional extras: `kelet[google-adk]`, `kelet[openai]`, `kelet[anthropic]`, `kelet[langchain]`, `kelet[all]` |
+| TypeScript / Node.js | `kelet @opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http`                      |
+| React frontend       | `@kelet-ai/feedback-ui`                                                                                               |
 
 ## Python SDK
 
@@ -17,10 +17,8 @@ Functions (all in `kelet` namespace):
   env vars are set.
 - `kelet.agentic_session(*, session_id, user_id=None, project=None)` — async/sync context manager AND decorator
 - `kelet.agent(*, name)` — context manager; names an agent within a session for readable multi-agent traces
--
-
-`async kelet.signal(kind, source, *, session_id=None, trace_id=None, trigger_name=None, score=None, value=None, confidence=None, metadata=None, timestamp=None)` —
-submit a signal; auto-resolves session from context
+- `async kelet.signal(kind, source, *, session_id=None, trace_id=None, trigger_name=None, score=None, value=None, confidence=None, metadata=None, timestamp=None)` —
+  submit a signal; auto-resolves session from context
 
 - `kelet.get_session_id()` — get current session ID from context
 - `kelet.create_kelet_processor()` — for manual OTEL setup (e.g.
@@ -79,15 +77,15 @@ Use `KeletExporter` in `instrumentation.ts` via `@vercel/otel`:
 
 ## Env Vars
 
-Keys are self-describing by prefix: `kelet_sk_...` = secret · `kelet_pk_...` = publishable.
+Keys are self-describing by prefix: `sk-kelet-...` = secret · `pk-kelet-...` = publishable.
 
-| Variable                            | Where             | What                                                                  |
-|-------------------------------------|-------------------|-----------------------------------------------------------------------|
-| `KELET_API_KEY`                     | Server            | Secret key — required; configure() raises ValueError if missing       |
-| `KELET_PROJECT`                     | Server            | Project name — required; SDK throws at startup if missing             |
-| `KELET_API_URL`                     | Server (optional) | Custom endpoint (self-hosted)                                         |
-| `VITE_KELET_PUBLISHABLE_KEY`        | Vite frontend     | Publishable key for KeletProvider                                     |
-| `NEXT_PUBLIC_KELET_PUBLISHABLE_KEY` | Next.js           | Same, Next.js convention                                              |
-| `VITE_KELET_PROJECT`                | Vite frontend     | Project name for KeletProvider                                        |
-| `NEXT_PUBLIC_KELET_PROJECT`         | Next.js           | Same, Next.js convention                                              |
-| `PUBLIC_KELET_PROJECT`              | SvelteKit         | Same, SvelteKit convention                                            |
+| Variable                            | Where             | What                                                            |
+| ----------------------------------- | ----------------- | --------------------------------------------------------------- |
+| `KELET_API_KEY`                     | Server            | Secret key — required; configure() raises ValueError if missing |
+| `KELET_PROJECT`                     | Server            | Project name — required; missing = silent routing to wrong project |
+| `KELET_API_URL`                     | Server (optional) | Custom endpoint (self-hosted)                                   |
+| `VITE_KELET_PUBLISHABLE_KEY`        | Vite frontend     | Publishable key for KeletProvider                               |
+| `NEXT_PUBLIC_KELET_PUBLISHABLE_KEY` | Next.js           | Same, Next.js convention                                        |
+| `VITE_KELET_PROJECT`                | Vite frontend     | Project name for KeletProvider                                  |
+| `NEXT_PUBLIC_KELET_PROJECT`         | Next.js           | Same, Next.js convention                                        |
+| `PUBLIC_KELET_PROJECT`              | SvelteKit         | Same, SvelteKit convention                                      |

@@ -1,0 +1,53 @@
+{
+  "eval_id": 4,
+  "eval_name": "fastapi-pydantic-ai-with-react-ui",
+  "prompt": "integrate kelet into my app",
+  "app_description": "FastAPI backend + pydantic-ai agent. React frontend (Vite). Plain chat UI — messages in, AI responses out. No feedback buttons at all. Session ID generated server-side, returned in X-Session-ID response header, stored in React state. Deployed on Vercel (frontend) + Fly.io (backend).",
+  "assertions": [
+    {
+      "id": "configure_called",
+      "description": "kelet.configure() added at server startup",
+      "type": "code"
+    },
+    {
+      "id": "agentic_session_wired",
+      "description": "agentic_session() wraps agent call with session_id",
+      "type": "code"
+    },
+    {
+      "id": "kelet_provider_added",
+      "description": "KeletProvider added at React root with publishable key",
+      "type": "code"
+    },
+    {
+      "id": "votefeedback_added",
+      "description": "VoteFeedback component added next to AI message output (not a floating widget or separate page)",
+      "type": "code"
+    },
+    {
+      "id": "session_id_propagated",
+      "description": "Session ID from X-Session-ID response header is captured in React state and passed to VoteFeedback sessionId prop",
+      "type": "llm"
+    },
+    {
+      "id": "both_keys_in_env",
+      "description": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY are present in .env at end of integration (either pre-existing or newly added). Neither hardcoded in source.",
+      "type": "llm"
+    },
+    {
+      "id": "on_brand_ui",
+      "description": "VoteFeedback is placed and configured to look natural in the chat UI — not a jarring out-of-place widget. Skill checks existing styles/theme and passes appropriate props or classnames.",
+      "type": "llm"
+    },
+    {
+      "id": "implicit_fe_signals",
+      "description": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback — e.g. useKeletSignal for copy-to-clipboard on AI output, message retry, or session abandon. Does not just stop at VoteFeedback.",
+      "type": "llm"
+    },
+    {
+      "id": "deeplink_generated",
+      "description": "Synthetic evaluator deeplink generated via Bash (not shown as code block)",
+      "type": "llm"
+    }
+  ]
+}

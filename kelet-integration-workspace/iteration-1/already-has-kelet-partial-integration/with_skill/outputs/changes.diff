@@ -1,0 +1,114 @@
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..2fd68e9 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -1,8 +1,8 @@
+ """FastAPI application — docs-ai service."""
+ import logging
+ from contextlib import asynccontextmanager
+-from typing import cast
+
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -15,6 +15,8 @@ from settings import settings
+
+ logger = logging.getLogger(__name__)
+
++kelet.configure()  # reads KELET_API_KEY + KELET_PROJECT from env
++
+
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..709d9c6 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -3,6 +3,7 @@ import json
+ import logging
+ from typing import AsyncGenerator
+
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -24,6 +25,9 @@ class ChatRequest(BaseModel):
+     message: str = Field(min_length=1, max_length=4000)
+     session_id: str | None = None
+     current_page_slug: str | None = None
++    # Phone number is the only persistent user identifier in this app.
++    # Pass it per-request so Kelet can link turns across sessions to the same user.
++    phone_number: str | None = None
+
+
+ async def _run_agent_stream(
+@@ -32,29 +36,34 @@ async def _run_agent_stream(
+     message_history: list[ModelMessage],
+     session: ChatSession,
+     redis: Redis,
++    user_id: str | None = None,
+ ) -> AsyncGenerator[str, None]:
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        async with kelet.agentic_session(
++            session_id=session.session_id,
++            user_id=user_id,
++        ):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+@@ -123,7 +132,14 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+     )
+
+     return StreamingResponse(
+-        _run_agent_stream(body.message, deps, message_history, session, redis),
++        _run_agent_stream(
++            body.message,
++            deps,
++            message_history,
++            session,
++            redis,
++            user_id=body.phone_number,
++        ),
+         media_type="text/event-stream",
+         headers={
+             "Cache-Control": "no-cache",

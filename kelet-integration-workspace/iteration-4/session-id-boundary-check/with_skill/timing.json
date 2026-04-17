@@ -1,0 +1,17 @@
+{
+  "eval_id": 2,
+  "eval_name": "session-id-boundary-check",
+  "started_at": "2026-04-17T18:40:12Z",
+  "completed_at": "2026-04-17T18:44:04Z",
+  "duration_seconds": 232,
+  "phases": {
+    "skill_read": 8,
+    "codebase_analysis": 95,
+    "checkpoint_1_question": 12,
+    "signal_analysis": 18,
+    "checkpoint_2_question": 15,
+    "deeplink_generation": 3,
+    "implementation": 72,
+    "phase_v_verification": 9
+  }
+}

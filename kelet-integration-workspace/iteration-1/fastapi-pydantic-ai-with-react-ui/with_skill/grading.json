@@ -1,0 +1,67 @@
+{
+  "run_id": "fastapi-pydantic-ai-with-react-ui-with_skill",
+  "eval_name": "fastapi-pydantic-ai-with-react-ui",
+  "config": "with_skill",
+  "summary": {
+    "passed": 7,
+    "failed": 2,
+    "total": 9,
+    "pass_rate": 0.778
+  },
+  "expectations": [
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() added at server startup",
+      "passed": true,
+      "evidence": "changes.diff shows `kelet.configure()` added at module level in app/main.py before app creation, outside any request handler."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps agent call with session_id",
+      "passed": true,
+      "evidence": "changes.diff shows `async with kelet.agentic_session(session_id=session.session_id):` wrapping `chat_agent.iter()` in src/routers/chat.py."
+    },
+    {
+      "id": "kelet_provider_added",
+      "text": "KeletProvider added at React root with publishable key",
+      "passed": true,
+      "evidence": "changes.diff shows KeletProvider wrapping App in frontend/src/main.tsx with apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY} and project={import.meta.env.VITE_KELET_PROJECT}."
+    },
+    {
+      "id": "votefeedback_added",
+      "text": "VoteFeedback component added next to AI message output",
+      "passed": true,
+      "evidence": "changes.diff shows VoteFeedback.Root with UpvoteButton, DownvoteButton, Popover, Textarea, and SubmitButton added inside each assistant message in frontend/src/App.tsx."
+    },
+    {
+      "id": "session_id_propagated",
+      "text": "Session ID from X-Session-ID header passed to VoteFeedback session_id prop",
+      "passed": true,
+      "evidence": "frontend_changes.md explicitly documents the full flow: X-Session-ID header captured in React state via res.headers.get('X-Session-ID'), stored as sessionId state, passed as session_id={sessionId} to VoteFeedback.Root. Transcript verification checklist confirms 'Session ID consistent end-to-end: server-generated UUID → X-Session-ID header → React state → VoteFeedback.Root session_id'."
+    },
+    {
+      "id": "both_keys_in_env",
+      "text": "KELET_API_KEY (server) and VITE_KELET_PUBLISHABLE_KEY (frontend) both written to env",
+      "passed": false,
+      "evidence": "changes.diff shows VITE_KELET_PUBLISHABLE_KEY added to .env, but KELET_API_KEY is not in the diff (transcript notes it was already present). The assertion requires both to appear — only the publishable key is visibly written."
+    },
+    {
+      "id": "on_brand_ui",
+      "text": "VoteFeedback placement and styling fits the existing chat UI theme",
+      "passed": true,
+      "evidence": "frontend_changes.md has a dedicated 'Theme/Style Considerations' section: VoteFeedback buttons match the plain inline-style approach, Popover uses matching white background/#ccc border/blue #0070f3 submit button matching existing Send button. No style system dependency introduced."
+    },
+    {
+      "id": "implicit_fe_signals",
+      "text": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback",
+      "passed": false,
+      "evidence": "Transcript explicitly states 'Lightweight mode: keep it to VoteFeedback only.' Signal analysis notes 'No copy button. No retry button. Only thing to add is VoteFeedback'. No useKeletSignal or additional signals proposed — the skill correctly applied lightweight mode but did not explore or mention additional signal opportunities."
+    },
+    {
+      "id": "deeplink_generated",
+      "text": "Synthetic evaluator deeplink generated via Bash (not shown as code block)",
+      "passed": true,
+      "evidence": "deeplink.txt contains real https://console.kelet.ai/docs-ai-assistant/synthetics/setup?deeplink=<base64url> URL. Transcript states 'Deeplink generated (Bash execution — not shown as code block)' with Task Completion and Sentiment Analysis evaluators."
+    }
+  ]
+}

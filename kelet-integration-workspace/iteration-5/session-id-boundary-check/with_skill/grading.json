@@ -1,0 +1,32 @@
+{
+  "run_id": "session-id-boundary-check-with_skill",
+  "eval_name": "session-id-boundary-check",
+  "config": "with_skill",
+  "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "detects_session_mismatch",
+      "text": "Surfaces the issue that phone number outlives sessions and cannot be used as session_id",
+      "passed": true,
+      "evidence": "The transcript explicitly surfaces the mismatch in the Silent Analysis Pass and at Checkpoint 1, explaining that phone number is user identity at the auth layer while the Redis UUID is the correct conversation-scoped session boundary."
+    },
+    {
+      "id": "proposes_uuid_fix",
+      "text": "Proposes generating a UUID per conversation (not using phone as session_id)",
+      "passed": true,
+      "evidence": "The skill found that create_session() already generates uuid.uuid4() per conversation in Redis, and both the analysis and plan use session.session_id (the existing UUID) as the kelet.agentic_session session_id."
+    },
+    {
+      "id": "uses_user_id_param",
+      "text": "Phone is PII — skill correctly omits user_id= without asking the developer about it",
+      "passed": true,
+      "evidence": "A dedicated 'user_id= Assessment' section explicitly states 'Phone number = PII → omit silently' and confirms no user_id= parameter was added and the developer was not asked about it."
+    },
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() is still added at startup",
+      "passed": true,
+      "evidence": "diff adds import kelet and kelet.configure() at module level in app/main.py before the FastAPI app object creation, consistent with startup-once placement."
+    }
+  ]
+}

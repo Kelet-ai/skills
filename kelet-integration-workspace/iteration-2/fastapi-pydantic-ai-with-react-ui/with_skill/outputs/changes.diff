@@ -1,0 +1,153 @@
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..3b42887 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -3,6 +3,7 @@ import logging
+ from contextlib import asynccontextmanager
+ from typing import cast
+
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -15,6 +16,9 @@ from settings import settings
+
+ logger = logging.getLogger(__name__)
+
++# Initialize Kelet — reads KELET_API_KEY and KELET_PROJECT from environment
++kelet.configure()
++
+
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..a7d7cb3 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -3,6 +3,7 @@ import json
+ import logging
+ from typing import AsyncGenerator
+
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -36,27 +37,35 @@ async def _run_agent_stream(
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        async with kelet.agentic_session(session_id=session.session_id):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
++        await kelet.signal(
++            "EVENT",
++            "LABEL",
++            session_id=session.session_id,
++            trigger_name="agent-stream-error",
++            score=0.0,
++        )
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+         return
+
+--- NEW FILE: .env (additions) ---
++KELET_API_KEY=sk-kelet-test-123
++KELET_PROJECT=docs-ai-assistant
++VITE_KELET_PUBLISHABLE_KEY=pk-kelet-test-456
++VITE_KELET_PROJECT=docs-ai-assistant
+
+--- NEW FILE: frontend/src/App.tsx ---
++import { useState } from 'react'
++import { VoteFeedback, useKeletSignal } from '@kelet-ai/feedback-ui'
++
++interface Message { role: 'user' | 'assistant'; content: string }
++
++function AssistantMessage({ content, sessionId }: { content: string; sessionId: string }) {
++  const sendSignal = useKeletSignal()
++
++  const handleCopy = () => {
++    navigator.clipboard.writeText(content)
++    if (sessionId) {
++      sendSignal({ session_id: sessionId, kind: 'EVENT', source: 'HUMAN', trigger_name: 'user-copy' })
++    }
++  }
++
++  return (
++    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginBottom: 12 }}>
++      <span ...>{content}</span>
++      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
++        {sessionId && (
++          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
++            <VoteFeedback.Root session_id={sessionId}>
++              <VoteFeedback.UpvoteButton><span>👍</span></VoteFeedback.UpvoteButton>
++              <VoteFeedback.DownvoteButton><span>👎</span></VoteFeedback.DownvoteButton>
++              <VoteFeedback.Popover style={{ position: 'absolute', bottom: 'calc(100% + 8px)', ... }}>
++                <VoteFeedback.Textarea placeholder="What went wrong? (optional)" />
++                <VoteFeedback.SubmitButton>Submit</VoteFeedback.SubmitButton>
++              </VoteFeedback.Popover>
++            </VoteFeedback.Root>
++          </div>
++        )}
++        <button onClick={handleCopy} aria-label="Copy response">Copy</button>
++      </div>
++    </div>
++  )
++}
+
+--- NEW FILE: frontend/src/main.tsx ---
++import { KeletProvider } from '@kelet-ai/feedback-ui'
++
++ReactDOM.createRoot(document.getElementById('root')!).render(
++  <React.StrictMode>
++    <KeletProvider
++      apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY}
++      project={import.meta.env.VITE_KELET_PROJECT}
++    >
++      <App />
++    </KeletProvider>
++  </React.StrictMode>
++)
+
+--- NEW FILE: frontend/vite.config.ts ---
++export default defineConfig({
++  plugins: [react()],
++  server: {
++    proxy: { '/api': 'http://localhost:8001' },
++  },
++})
