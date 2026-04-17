@@ -1,0 +1,211 @@
+{
+  "skill_name": "kelet-integration",
+  "evals": [
+    {
+      "id": 1,
+      "name": "fastapi-pydantic-ai-lightweight",
+      "prompt": "integrate kelet into my app",
+      "app_description": "FastAPI backend using pydantic-ai. Sessions stored in Redis (session_id generated server-side, returned in X-Session-ID response header). No React frontend — plain HTML. Deployed on Fly.io.",
+      "repo": "../docs-ai",
+      "repo_branch": "without-kelet",
+      "expected_output": "Minimal integration: kelet.configure() at startup + agentic_session() wired to Redis session_id + managed synthetics deeplink. No VoteFeedback (no React). At most 2 AskUserQuestion calls. Keys/project collected in one question.",
+      "assertions": [
+        {
+          "id": "installs_kelet",
+          "description": "Adds kelet to pyproject.toml or requirements",
+          "type": "code"
+        },
+        {
+          "id": "configure_called",
+          "description": "kelet.configure() is called at startup (not per-request)",
+          "type": "code"
+        },
+        {
+          "id": "agentic_session_wired",
+          "description": "agentic_session() wraps the agent call with the existing Redis session_id",
+          "type": "code"
+        },
+        {
+          "id": "no_voteback_no_react",
+          "description": "Does not add VoteFeedback or React (app has no React frontend)",
+          "type": "llm"
+        },
+        {
+          "id": "keys_in_env",
+          "description": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)",
+          "type": "code"
+        },
+        {
+          "id": "question_budget",
+          "description": "AskUserQuestion called at most 3 times total across the whole integration",
+          "type": "llm"
+        },
+        {
+          "id": "lightweight_mode",
+          "description": "Integration is lightweight — does not add unnecessary signals or complexity",
+          "type": "llm"
+        },
+        {
+          "id": "deeplink_generated",
+          "description": "Synthetic evaluator deeplink is generated via Bash execution (not shown as copy-paste code block)",
+          "type": "llm"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "session-id-boundary-check",
+      "prompt": "add kelet to my project",
+      "app_description": "FastAPI + pydantic-ai. User identity = phone number stored in DB. No per-conversation UUID — phone number is the only identifier. Multi-turn chat, users can start fresh conversations.",
+      "repo": "../docs-ai",
+      "repo_branch": "without-kelet",
+      "expected_output": "Skill must surface the session boundary mismatch: phone number outlives sessions. Should propose generating a UUID per conversation stored as kelet_session_id, pass phone as user_id=. Should NOT silently use phone number as session_id.",
+      "assertions": [
+        {
+          "id": "detects_session_mismatch",
+          "description": "Surfaces the issue that phone number outlives sessions and cannot be used as session_id",
+          "type": "llm"
+        },
+        {
+          "id": "proposes_uuid_fix",
+          "description": "Proposes generating a UUID per conversation (not using phone as session_id)",
+          "type": "llm"
+        },
+        {
+          "id": "uses_user_id_param",
+          "description": "Passes stable identifier (phone) as user_id= in agentic_session()",
+          "type": "llm"
+        },
+        {
+          "id": "configure_called",
+          "description": "kelet.configure() is still added at startup",
+          "type": "code"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "already-has-kelet-partial-integration",
+      "prompt": "I already have kelet installed but I'm not seeing sessions in the console",
+      "app_description": "FastAPI + pydantic-ai. Has kelet in deps and configure() called. But agentic_session() is missing — each LLM call shows as a separate unlinked trace.",
+      "repo": "../docs-ai",
+      "repo_branch": "without-kelet",
+      "expected_output": "Should diagnose the missing agentic_session() as the cause. Should add it without re-running the full integration flow from scratch. Should NOT re-ask for keys/project (already configured). Should reference common-mistakes.md silent failure modes.",
+      "assertions": [
+        {
+          "id": "diagnoses_missing_session",
+          "description": "Correctly identifies missing agentic_session() as the cause of unlinked traces",
+          "type": "llm"
+        },
+        {
+          "id": "adds_agentic_session",
+          "description": "Adds agentic_session() wrapping the agent call",
+          "type": "code"
+        },
+        {
+          "id": "no_redundant_setup",
+          "description": "Does not re-ask for API keys or project name that are already configured. If configure() is present and correct, does not re-add it. Fixing a broken/wrong method (e.g. kelet.init() → kelet.configure()) is acceptable and does NOT count as redundant.",
+          "type": "llm"
+        },
+        {
+          "id": "phase_v_verification",
+          "description": "Includes verification step: trigger LLM call and check console for sessions",
+          "type": "llm"
+        }
+      ]
+    }
+    ,
+    {
+      "id": 4,
+      "name": "fastapi-pydantic-ai-with-react-ui",
+      "prompt": "integrate kelet into my app",
+      "app_description": "FastAPI backend + pydantic-ai agent. React frontend (Vite). Plain chat UI — messages in, AI responses out. No feedback buttons at all. Session ID generated server-side, returned in X-Session-ID response header, stored in React state. Deployed on Vercel (frontend) + Fly.io (backend).",
+      "repo": "../docs-ai",
+      "repo_branch": "without-kelet",
+      "expected_output": "Full integration: kelet.configure() + agentic_session() on server. KeletProvider at React root with publishable key. VoteFeedback added next to AI messages (skill adds it from scratch — no existing buttons to wire to). Session ID from X-Session-ID header passed to VoteFeedback. Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY in env. VoteFeedback styled to match app theme. Deeplink generated.",
+      "assertions": [
+        {
+          "id": "configure_called",
+          "description": "kelet.configure() added at server startup",
+          "type": "code"
+        },
+        {
+          "id": "agentic_session_wired",
+          "description": "agentic_session() wraps agent call with session_id",
+          "type": "code"
+        },
+        {
+          "id": "kelet_provider_added",
+          "description": "KeletProvider added at React root with publishable key",
+          "type": "code"
+        },
+        {
+          "id": "votefeedback_added",
+          "description": "VoteFeedback component added next to AI message output (not a floating widget or separate page)",
+          "type": "code"
+        },
+        {
+          "id": "session_id_propagated",
+          "description": "Session ID from X-Session-ID response header is captured in React state and passed to VoteFeedback sessionId prop",
+          "type": "llm"
+        },
+        {
+          "id": "both_keys_in_env",
+          "description": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY are present in .env at end of integration (either pre-existing or newly added). Neither hardcoded in source.",
+          "type": "llm"
+        },
+        {
+          "id": "on_brand_ui",
+          "description": "VoteFeedback is placed and configured to look natural in the chat UI — not a jarring out-of-place widget. Skill checks existing styles/theme and passes appropriate props or classnames.",
+          "type": "llm"
+        },
+        {
+          "id": "implicit_fe_signals",
+          "description": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback — e.g. useKeletSignal for copy-to-clipboard on AI output, message retry, or session abandon. Does not just stop at VoteFeedback.",
+          "type": "llm"
+        },
+        {
+          "id": "deeplink_generated",
+          "description": "Synthetic evaluator deeplink generated via Bash (not shown as code block)",
+          "type": "llm"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "expand-to-full-mode",
+      "prompt": "I want to go deeper with Kelet — add more signals and get better coverage",
+      "app_description": "FastAPI + pydantic-ai. Already has kelet.configure() and agentic_session() wired. Plain HTML frontend, no React. Developer explicitly wants full mode: more signals, better failure coverage.",
+      "repo": "../docs-ai",
+      "repo_branch": "without-kelet",
+      "expected_output": "Skill switches to full mode (developer explicitly asked). Should NOT re-do the basic setup (configure/session already done). Should propose additional signal layers appropriate for a non-React app: server-side coded signals for failure modes (tool errors, timeouts, retries if applicable), expanded synthetic evaluators beyond Task Completion. Should explain what each addition catches. Should NOT propose VoteFeedback or React since there's no React frontend.",
+      "assertions": [
+        {
+          "id": "no_repeat_basic_setup",
+          "description": "Does not re-add configure() or agentic_session() — skips already-done work",
+          "type": "llm"
+        },
+        {
+          "id": "proposes_additional_signals",
+          "description": "Proposes at least one additional coded signal beyond what's already in place (e.g. server-side event for errors, retries, or abandonment)",
+          "type": "llm"
+        },
+        {
+          "id": "expands_synthetics",
+          "description": "Proposes more synthetic evaluators than the default Task Completion (e.g. Sentiment Analysis, Conversation Completeness, or role-specific ones)",
+          "type": "llm"
+        },
+        {
+          "id": "no_votefeedback_no_react",
+          "description": "Does not propose VoteFeedback or React since app has no React frontend",
+          "type": "llm"
+        },
+        {
+          "id": "explains_value",
+          "description": "Explains what each new signal or evaluator catches — not just lists them",
+          "type": "llm"
+        }
+      ]
+    }
+  ]
+}

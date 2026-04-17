@@ -32,7 +32,7 @@ Open with a welcome banner. Teach these concepts before any code:
 
 - **Trace** — automatic recording of one LLM call or tool invocation: model, inputs/outputs, latency, tokens, errors. `kelet.configure()` captures these with zero code changes.
 - **Session** — a group of traces that belong to one unit of work (one conversation, one request chain). Sessions are how Kelet correlates what happened across multiple LLM calls.
-- **Signal** — a tip you drop at a meaningful moment. Not a verdict — a pointer. Thumbs-down = *start looking here*. Edit = *close but wrong*. Abandon = *gave up*. More deliberate tips → narrower investigation → faster fix.
+- **Signal** — a tip you drop at a meaningful moment. Not a verdict — a pointer. Thumbs-down = _start looking here_. Edit = _close but wrong_. Abandon = _gave up_. More deliberate tips → narrower investigation → faster fix.
 - **Synthetic** — an automated signal Kelet runs on every session using the trace data it already has. No developer code needed.
 - **Project** — a logical boundary for one agentic use case. Cross-boundary trigger (e.g. support bot vs. coding assistant) = two projects. Prod vs. staging = two projects. Data from the wrong project is invisible in RCA.
 - What's ahead: silent analysis + **at most 3 `AskUserQuestion` calls (ideally 2)**
@@ -63,8 +63,10 @@ Open each checkpoint with a banner (`🔍  ANALYSIS · PROJECT + WORKFLOW MAPPIN
 - **Pre-flight (outside budget):** If no app description in trigger message, ask: "What does your AI app do and how do users interact with it?" before reading files.
 - **Silent analysis first.** Enter `/plan` mode only at Implementation Approval — not during Checkpoint 2.
 - **If Kelet already in deps:** skip setup, focus on what was asked. Analysis pass + Phase V still apply.
+- **Match the app's visual style.** Any UI added (VoteFeedback buttons, copy button, retry, etc.) must use the app's existing CSS classes, design tokens, and component patterns — not arbitrary inline styles or emoji defaults. Read the stylesheet and existing components before writing children.
 
 Question slots:
+
 1. Checkpoint 1 — confirm project/workflow map
 2. Checkpoint 2 — confirm plan + collect keys + project name
 3. Only if deployment is truly unknown and secrets can't proceed safely
@@ -89,6 +91,7 @@ Read silently — no questions yet. Cover:
 Skip styling, auth, unrelated business logic. Flag other repos/services in the agentic flow — developer should run this skill there too.
 
 **Build the Project Map:**
+
 ```
 Use case: [what the agents do]
 Flows → Kelet projects:
@@ -123,14 +126,18 @@ If corrections change flow count, framework, or session structure — redo the a
 **Coded signals are almost always frontend** — human reacting to AI output in a browser. Go server-side only when consumer is another system, feedback happens via endpoints (e.g. `/approve`), or an external classifier scores output outside the LLM path.
 
 **Synthetic (platform, no customer code):**
+
 - ONE evaluator per failure category — two on the same category multiply noise
 - Default: Task Completion + 1–2 others grounded in observed failure modes
 - See [references/signals.md](references/signals.md) for preset list
 
 **Coded — frontend (lightweight: 0–2 max):**
+
 - Only if NOT session-derivable AND there's a real existing hook in the codebase
 - Vote → `VoteFeedback`, edits → `useFeedbackState`, behavioral events → `useKeletSignal`
 - `kind`: `FEEDBACK` · `EDIT` · `EVENT` · `METRIC` · `ARBITRARY` — `source`: `HUMAN` · `LABEL` · `SYNTHETIC`
+- **React UI scan:** When a React frontend is present, scan the component tree for existing interactive elements before settling on VoteFeedback alone. Priority (highest diagnostic value first): edit inputs on AI output → `useFeedbackState`; copy-to-clipboard, retry, session reset → `useKeletSignal`. Propose 1–2 max. Wire to existing event handlers — don't add new UI.
+
 
 **Coded — server-side:** only if user isn't a browser or feedback is endpoint-driven.
 
@@ -156,17 +163,18 @@ Single `AskUserQuestion` with `multiSelect: true` for evaluator selection. Struc
 Ask for keys only if not already in env/config. Ask for project name only if not reliably determinable; if missing suggest a name and ask them to confirm.
 
 After receiving inputs:
+
 - **Execute deeplink script with Bash** (never show as a code block). See [references/signals.md](references/signals.md).
 - Present deeplink URL as bold action item (activation can happen now or later — don't block on it).
 - Show "what you'll see" table — **only rows for items in the proposed plan:**
 
-| After implementing | Visible in Kelet console |
-|---|---|
-| `kelet.configure()` | LLM spans in Traces: model, tokens, latency, errors |
-| `agentic_session()` | Sessions view: full conversation grouped for RCA |
-| VoteFeedback | Signals: 👍/👎 correlated to exact trace |
+| After implementing                | Visible in Kelet console                             |
+| --------------------------------- | ---------------------------------------------------- |
+| `kelet.configure()`               | LLM spans in Traces: model, tokens, latency, errors  |
+| `agentic_session()`               | Sessions view: full conversation grouped for RCA     |
+| VoteFeedback                      | Signals: 👍/👎 correlated to exact trace             |
 | Edit signals (`useFeedbackState`) | Signals: what users corrected — reveals model errors |
-| Platform synthetics | Signals: automated quality scores |
+| Platform synthetics               | Signals: automated quality scores                    |
 
 Only write `source=SYNTHETIC` code if developer explicitly asks AND platform can't implement it — explain why the platform can't handle it and ask them to confirm before proceeding.
 
@@ -183,6 +191,7 @@ Enter `/plan` mode, present full implementation plan, call `ExitPlanMode` for ap
 ## API Keys
 
 Two types — never mix:
+
 - **Secret** (`KELET_API_KEY`, `sk-kelet-...`): server-only. **The SDK accepts either key type without erroring** — using the wrong one is a silent failure.
 - **Publishable** (`VITE_KELET_PUBLISHABLE_KEY` / `NEXT_PUBLIC_KELET_PUBLISHABLE_KEY`, `pk-kelet-...`): frontend only.
 
@@ -195,11 +204,14 @@ Write to config: `.env` → `KEY=value` · `.envrc` → `export KEY=value` · K8
 A session = one unit of work. New context = new session.
 
 **`agentic_session()` NOT required** (auto-instrumented):
-LangChain/LangGraph · LlamaIndex · CrewAI · Haystack · LiteLLM · Google ADK (`kelet[google-adk]` recommended) · pydantic-ai · DSPy · Langfuse · Langroid · anything using OpenInference/OpenLLMetry
+LangChain/LangGraph · LlamaIndex · CrewAI · Haystack · Google ADK (`kelet[google-adk]` recommended) · pydantic-ai · DSPy · Langfuse · Langroid · anything using OpenInference/OpenLLMetry
+
+⚠️ **Bare LiteLLM** — traces are auto-captured, but LiteLLM does **not** propagate session/agent context into its spans. If LiteLLM is called directly (not through another supported framework like Google ADK), wrap calls in `agentic_session()` (and optionally `kelet.agent()`) to group them. When LiteLLM runs under another instrumented framework, the parent span provides context — no wrapping needed.
 
 If unlisted — research before omitting.
 
 **`agentic_session(session_id=...)` REQUIRED** (both silent if omitted):
+
 - **App owns the session ID** (Redis, DB, server-generated): framework doesn't know it → VoteFeedback linkage breaks
 - **You own the loop** (agent A → agent B, Temporal, custom orchestrators): no framework sets the overall session ID → spans appear as unlinked traces. TS: `agenticSession({ sessionId }, callback)`.
 
@@ -216,6 +228,7 @@ See [references/api.md](references/api.md) for signatures. See [references/stack
 See [references/implementation.md](references/implementation.md) for the decision tree and steps.
 
 **Python:**
+
 ```python
 kelet.configure()  # reads KELET_API_KEY + KELET_PROJECT from env
 async with kelet.agentic_session(session_id=session_id):
@@ -223,11 +236,13 @@ async with kelet.agentic_session(session_id=session_id):
 ```
 
 **TypeScript** — `agenticSession` is **callback-based**, not a context manager (critical difference):
+
 ```ts
 await agenticSession({ sessionId }, async () => {
     return await chain.invoke(...);
 });
 ```
+
 Call `configure({ project })` explicitly if not using env vars, or set `KELET_API_KEY` + `KELET_PROJECT` and it auto-resolves on first signal.
 
 **Next.js:** `KeletExporter` in `instrumentation.ts` via `@vercel/otel`. Two silent-if-omitted configs — see stack-notes.md.

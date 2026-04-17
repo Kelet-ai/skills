@@ -24,6 +24,11 @@ you, sessions are inferred automatically — no wrapper needed. See Sessions sec
 framework doesn't expose agent names natively (pydantic-ai does; OpenAI/Anthropic/raw SDKs don't — Kelet can't infer
 it). Logfire users: `kelet.configure()` detects the existing `TracerProvider` — no conflict.
 
+**Bare LiteLLM:** traces are auto-captured, but LiteLLM does not natively propagate session/agent context into its
+spans. If LiteLLM is called directly (not through another instrumented framework like Google ADK), wrap calls in
+`agentic_session()` (and optionally `kelet.agent()`) to group them. When LiteLLM runs under another framework that
+sets context, no extra wrapping is needed.
+
 **Streaming:** wrap the **entire** generator body (not the caller), including the final sentinel — trailing spans are
 silently lost otherwise:
 
