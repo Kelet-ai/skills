@@ -73,7 +73,7 @@
         },
         {
           "id": "uses_user_id_param",
-          "description": "Passes stable identifier (phone) as user_id= in agentic_session()",
+          "description": "Phone is PII — skill correctly omits user_id= without asking the developer about it",
           "type": "llm"
         },
         {
