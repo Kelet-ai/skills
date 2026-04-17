@@ -12,7 +12,7 @@
       "assertions": [
         {
           "id": "installs_kelet",
-          "description": "Adds kelet to pyproject.toml or requirements",
+          "description": "kelet is present in pyproject.toml or requirements at end of integration (pre-existing or newly added)",
           "type": "code"
         },
         {

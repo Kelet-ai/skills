@@ -217,7 +217,7 @@ If unlisted — research before omitting.
 
 ⚠️ **Vercel AI SDK** — supported framework but doesn't set session IDs: use `agenticSession()` at route level.
 
-**User identity ≠ session ID.** Stable identifiers (phone, email, user_id) outlive sessions. If it's the only ID: generate UUID per conversation, store as `kelet_session_id`, regenerate on reset, pass stable ID as `user_id=`.
+**User identity ≠ session ID.** Stable identifiers (phone, email, user_id) outlive sessions. If the app has a stable user identity: generate UUID per conversation as `kelet_session_id`, regenerate on reset, and **always pass the stable ID as `user_id=`** — do this, don't just mention it.
 
 See [references/api.md](references/api.md) for signatures. See [references/stack-notes.md](references/stack-notes.md) for per-stack gotchas.
 
