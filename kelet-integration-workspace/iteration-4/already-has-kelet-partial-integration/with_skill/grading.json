@@ -1,0 +1,32 @@
+{
+  "run_id": "already-has-kelet-partial-integration-with_skill",
+  "eval_name": "already-has-kelet-partial-integration",
+  "config": "with_skill",
+  "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "diagnoses_missing_session",
+      "text": "Correctly identifies missing agentic_session() as the cause of unlinked traces",
+      "passed": true,
+      "evidence": "Transcript explicitly states 'agentic_session() is absent' as Finding 2 and explains that without it each LLM call produces an unlinked trace — exactly the reported symptom."
+    },
+    {
+      "id": "adds_agentic_session",
+      "text": "Adds agentic_session() wrapping the agent call",
+      "passed": true,
+      "evidence": "diff adds 'async with kelet.agentic_session(session_id=session.session_id):' wrapping the entire _run_agent_stream body including the [DONE] sentinel in src/routers/chat.py."
+    },
+    {
+      "id": "no_redundant_setup",
+      "text": "Does not re-ask for API keys or project name already configured. Fixing a broken/wrong method is acceptable and does NOT count as redundant.",
+      "passed": true,
+      "evidence": "Transcript explicitly notes .env already has the correct keys and settings model already has the fields; no prompts for new keys or project name are issued. Adding kelet.configure() is a fix, not a re-ask."
+    },
+    {
+      "id": "phase_v_verification",
+      "text": "Includes verification step: trigger LLM call and check console for sessions",
+      "passed": true,
+      "evidence": "Phase V checklist includes an unchecked smoke test item: 'trigger POST /chat → open Kelet console → verify session appears (allow a few minutes)'."
+    }
+  ]
+}

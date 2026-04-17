@@ -1,0 +1,32 @@
+{
+  "run_id": "session-id-boundary-check-with_skill",
+  "eval_name": "session-id-boundary-check",
+  "config": "with_skill",
+  "summary": {"passed": 3, "failed": 1, "total": 4, "pass_rate": 0.75},
+  "expectations": [
+    {
+      "id": "detects_session_mismatch",
+      "text": "Surfaces the issue that phone number outlives sessions and cannot be used as session_id",
+      "passed": true,
+      "evidence": "Analysis Pass section explicitly invokes the SKILL.md rule ('User identity ≠ session ID') and Checkpoint 1 directly flags to the developer that phone should be user identity, not session_id."
+    },
+    {
+      "id": "proposes_uuid_fix",
+      "text": "Proposes generating a UUID per conversation (not using phone as session_id)",
+      "passed": true,
+      "evidence": "Transcript confirms the code already generates uuid.uuid4() per conversation and the skill endorses this pattern as correct, explicitly stating phone must NOT be session_id."
+    },
+    {
+      "id": "uses_user_id_param",
+      "text": "Passes stable identifier (phone) as user_id= in agentic_session()",
+      "passed": false,
+      "evidence": "The diff shows agentic_session(session_id=session.session_id) with no user_id= argument; the transcript only mentions user_id=phone_number as a future optional enhancement and does not add it to the code."
+    },
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() is still added at startup",
+      "passed": true,
+      "evidence": "app/main.py diff adds kelet.configure() at module level before the lifespan definition."
+    }
+  ]
+}

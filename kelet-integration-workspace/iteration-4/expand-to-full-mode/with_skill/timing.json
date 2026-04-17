@@ -1,0 +1,14 @@
+{
+  "eval_id": 5,
+  "eval_name": "expand-to-full-mode",
+  "started_at": "2026-04-17T18:40:00Z",
+  "completed_at": "2026-04-17T18:40:45Z",
+  "duration_seconds": 45,
+  "phases": {
+    "read_skill": 3,
+    "read_codebase": 15,
+    "signal_analysis": 8,
+    "deeplink_generation": 2,
+    "write_outputs": 17
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "run_id": "fastapi-pydantic-ai-lightweight-with_skill",
+  "eval_name": "fastapi-pydantic-ai-lightweight",
+  "config": "with_skill",
+  "summary": {"passed": 7, "failed": 1, "total": 8, "pass_rate": 0.875},
+  "expectations": [
+    {
+      "id": "installs_kelet",
+      "text": "Adds kelet to pyproject.toml or requirements",
+      "passed": false,
+      "evidence": "kelet>=1.3.0 was already present in pyproject.toml before the integration; the skill did not add it and the diff contains no change to pyproject.toml."
+    },
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() is called at startup (not per-request)",
+      "passed": true,
+      "evidence": "app/main.py diff adds kelet.configure() at module level before the lifespan/app definition, exactly once at startup."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps the agent call with the existing Redis session_id",
+      "passed": true,
+      "evidence": "chat.py diff shows async with kelet.agentic_session(session_id=session.session_id) wrapping chat_agent.iter(), using the Redis-stored UUID from cache/__init__.py."
+    },
+    {
+      "id": "no_voteback_no_react",
+      "text": "Does not add VoteFeedback or React (app has no React frontend)",
+      "passed": true,
+      "evidence": "Transcript explicitly rules out VoteFeedback and React; the diff has no React or feedback-ui changes at all."
+    },
+    {
+      "id": "keys_in_env",
+      "text": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)",
+      "passed": true,
+      "evidence": ".env.example diff adds KELET_API_KEY and KELET_PROJECT as env var placeholders with instructions; neither value is hardcoded in source files."
+    },
+    {
+      "id": "question_budget",
+      "text": "AskUserQuestion called at most 3 times total across the whole integration",
+      "passed": true,
+      "evidence": "Transcript shows exactly 2 checkpoints (mapping confirmation and plan+inputs), both within the 3-question budget."
+    },
+    {
+      "id": "lightweight_mode",
+      "text": "Integration is lightweight — does not add unnecessary signals or complexity",
+      "passed": true,
+      "evidence": "Only configure() and agentic_session() added; no coded signals, no new UI, no extra dependencies — transcript explicitly justifies omitting signals as correct for lightweight mode."
+    },
+    {
+      "id": "deeplink_generated",
+      "text": "Synthetic evaluator deeplink is generated via Bash execution (not shown as copy-paste code block)",
+      "passed": true,
+      "evidence": "Transcript section 'Deeplink generated (Bash execution)' presents the fully-resolved console URL with base64url payload, not generation code or a shell snippet to copy-paste."
+    }
+  ]
+}

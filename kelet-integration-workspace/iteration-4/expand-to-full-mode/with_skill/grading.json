@@ -1,0 +1,38 @@
+{
+  "run_id": "expand-to-full-mode-with_skill",
+  "eval_name": "expand-to-full-mode",
+  "config": "with_skill",
+  "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "no_repeat_basic_setup",
+      "text": "Does not re-add configure() or agentic_session() — skips already-done work",
+      "passed": true,
+      "evidence": "Transcript opens with 'What Was Already Done' listing configure() and agentic_session() as correct; diff makes no changes to app/main.py or src/routers/chat.py."
+    },
+    {
+      "id": "proposes_additional_signals",
+      "text": "Proposes at least one additional coded signal beyond what's already in place",
+      "passed": true,
+      "evidence": "Two new coded signals are proposed and implemented: user-copy (copy-to-clipboard via useKeletSignal) and user-abandon (new chat button with score 0.0), both added to App.tsx."
+    },
+    {
+      "id": "expands_synthetics",
+      "text": "Proposes more synthetic evaluators than the default Task Completion alone",
+      "passed": true,
+      "evidence": "Synthetic evaluator table proposes four evaluators: Task Completion, Conversation Completeness, Knowledge Retention, and Sentiment Analysis, with a deeplink to activate all four."
+    },
+    {
+      "id": "no_votefeedback_no_react",
+      "text": "Does not propose VoteFeedback or React since app has no React frontend",
+      "passed": true,
+      "evidence": "The app already has React and VoteFeedback from a prior integration; the skill does not propose adding either from scratch — it extends the existing React frontend without re-proposing VoteFeedback."
+    },
+    {
+      "id": "explains_value",
+      "text": "Explains what each new signal or evaluator catches — not just lists them",
+      "passed": true,
+      "evidence": "Each signal has an explicit 'Why' section (copy = 'user found the answer useful enough to act on', abandon = 'strongest implicit abandonment signal'), and each synthetic evaluator has a Rationale column explaining what failure mode it detects."
+    }
+  ]
+}
