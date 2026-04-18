@@ -12,7 +12,7 @@ license: CC-BY-4.0
 metadata:
   author: kelet-ai
   url: https://kelet.ai
-  version: "1.4.0"
+  version: "1.5.0"
 allowed-tools: Read Write Edit Bash WebFetch(https://docs-ai.kelet.ai) WebFetch(https://kelet.ai)
 ---
 
@@ -151,22 +151,41 @@ Present signal findings + **complete lightweight plan**. Don't ask the developer
 
 **Present in normal mode — do NOT enter `/plan` mode yet.**
 
-Single `AskUserQuestion` with `multiSelect: true` for evaluator selection. Structure it as:
+Single `AskUserQuestion` (`multiSelect: true`), structured as:
 
-1. **Proposed synthetic evaluators** (multiSelect) — list each proposed evaluator as an option so the developer explicitly picks which ones go into the deeplink. Include "None" as an option.
+1. **Proposed synthetic evaluators** (multiSelect) — list each proposed evaluator as an option so the developer explicitly picks which ones go into the project. Include "None" as an option.
 2. **Plan approval** — "Does the rest of the plan look right?"
 3. **Keys + project name** (only what's missing):
-   - `KELET_API_KEY` (`sk-kelet-...`) — get at console.kelet.ai/api-keys
-   - Publishable key (`pk-kelet-...`) — only if VoteFeedback is in the plan
-   - Project name: **create it first** at console.kelet.ai → top-nav → New Project. Must exactly match — wrong name = silent routing failure, data goes nowhere.
+   - `KELET_API_KEY` (`sk-kelet-...`) — get at console.kelet.ai/api-keys. **Required for synthetic auto-create.**
+   - Publishable key (`pk-kelet-...`) — only if VoteFeedback is in the plan.
+   - Project name: **create it first** at console.kelet.ai → top-nav → New Project. Must exactly match — wrong name = silent routing failure. (Server now verifies this and returns 404 with a hint; the skill surfaces it.)
+4. **API key mode** (three-way, only if synthetic evaluators were selected):
+   - "Paste secret key (sk-kelet-...)" → primary auto-create flow.
+   - "I'll grab one" → halt Checkpoint 2 with: "Get a key at console.kelet.ai/api-keys (10 seconds), paste it here to continue."
+   - "I can't paste secrets here" → deeplink fallback (single base64 markdown link; no server call, no project verification).
 
-Ask for keys only if not already in env/config. Ask for project name only if not reliably determinable; if missing suggest a name and ask them to confirm.
+### Creating the evaluators
 
-After receiving inputs:
+**Primary path (key pasted):**
 
-- **Execute deeplink script with Bash** (never show as a code block). See [references/signals.md](references/signals.md).
-- Present deeplink URL as bold action item (activation can happen now or later — don't block on it).
-- Show "what you'll see" table — **only rows for items in the proposed plan:**
+Before the Bash call, print this banner verbatim:
+
+> ⏳ Creating your evaluators. This takes **1–3 minutes** (sometimes up to 5) — Kelet generates each config with an LLM and runs a dedup pass. Sit tight; don't cancel.
+
+Then execute the curl with Bash (`timeout: 400000`) — see [references/signals.md](references/signals.md) for the exact command. Response is plain text: `created=N updated=N failed=N deduped=bool` + `X-Kelet-API-Version: 1` header.
+
+- **200:** render `✅ Kelet is now watching {project}. First evaluator results in ~3min at https://console.kelet.ai/{project}/signals`. If `failed > 0` → warn "N ideas timed out — re-run to retry."
+- **200 with `X-Kelet-API-Version != 1`:** warn skill may be out of date, continue.
+- **401:** key looks invalid — re-prompt.
+- **404 `project_not_found`:** surface server hint via `AskUserQuestion` — "Use a different project" (re-prompt) or "I'll create it first" (halt until confirmed).
+- **504 / timeout:** "Generator was slow. Re-run the skill to retry — partial state was persisted."
+- **5xx / network:** fail loud; show the error; stop. No silent fallback.
+
+**Fallback path (can't paste secrets):** build the base64 deeplink as a markdown link (see [references/signals.md](references/signals.md)). Project name is **not** verified in this path — add: "I can't verify the project name without a key — make sure it matches what you created in the console."
+
+### What you'll see
+
+Show the table — **only rows for items in the proposed plan:**
 
 | After implementing                | Visible in Kelet console                             |
 | --------------------------------- | ---------------------------------------------------- |
