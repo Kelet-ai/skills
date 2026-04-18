@@ -37,9 +37,9 @@ Claude genuinely doesn't know:
 ## Kelet-Specific Rules
 
 - **Synthetic signals = platform responsibility.** Never generate `source=SYNTHETIC` in customer code by default.
-  Instead, generate a deeplink after Phase 0c: base64url-encode `{"use_case": "<description from 0b>", "ideas": [...]}`
-  and present `https://console.kelet.ai/<project>/synthetics/setup?deeplink=<encoded>` — the console generates tailored evaluator
-  configs for the developer to review and activate.
+  Primary flow: auto-create via `POST /api/projects/<project>/synthetics` using the developer's `KELET_API_KEY` — the
+  server generates, upserts, and dedups evaluators in one call. Fallback (only when the user declines to paste a secret):
+  a base64url-encoded deeplink at `https://console.kelet.ai/<project>/synthetics/setup?deeplink=<encoded>`.
 - **Two API key types:** secret (`KELET_API_KEY`, server-only) and publishable (`VITE_KELET_PUBLISHABLE_KEY`,
   frontend-safe). Never mix them.
 - **Package names:** `kelet` (Python + TypeScript), `@kelet-ai/feedback-ui` (React).

@@ -104,19 +104,49 @@ preset name in the deeplink; the platform auto-configures them. Custom evaluator
 
 ---
 
-## Synthetic Deeplink Generation
+## Synthetic Creation
 
-Base64url-encode the payload, then build `https://console.kelet.ai/<project>/synthetics/setup?deeplink=<encoded>` — substitute `<project>` with the project name confirmed in Checkpoint 2.
+Two paths. Primary (auto-create via API) whenever the user pastes `KELET_API_KEY`. Fallback (deeplink) only when the user explicitly declines to paste a secret.
 
-**MUST EXECUTE this with the Bash tool** — never show as a code block for the user to copy:
+### Primary: API call
+
+**Long-running — 1–3 minutes typical, up to 5.**
+
+**MUST EXECUTE with Bash** (`timeout: 400000`) — never show as a code block for the user to copy:
+
+```bash
+curl -sS --max-time 360 \
+  -X POST "https://api.kelet.ai/api/projects/<project>/synthetics" \
+  -H "Authorization: Bearer $KELET_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -w '\n%{http_code}\n' \
+  -d '{"use_case":"<use_case>","ideas":[{"id":"<id>","name":"<name>","description":"<desc>","evaluator_type":"llm"}]}'
+```
+
+⚠️ Do NOT add `-f` / `--fail` — drops the response body on 4xx/5xx, breaking `project_not_found` hint surfacing and 401 diagnosis.
+
+Parse output: last line = status code, everything before = body.
+
+Include only evaluators the developer selected. Idea fields: `id`, `name`, `description`, `evaluator_type` (`"llm"` semantic, `"code"` deterministic). Optional: `icon`, `context` (steers the generator toward something specific).
+
+**Response.** Body: `created=N updated=N failed=N deduped=bool`.
+- `failed > 0` → warn: "N ideas timed out — re-run the skill to retry those."
+- 200 → success. 401 → invalid key. 404 `project_not_found` → surface the server's hint. 504 / timeout → "Generator was slow. Re-run to retry — partial state was persisted." 5xx / network → fail loud.
+
+### Fallback: deeplink
+
+**Only when the user declines to paste a secret key.** No project verification.
+
+URL shape: `https://console.kelet.ai/<project>/synthetics/setup?deeplink=<base64url-payload>` — substitute `<project>` with the name confirmed in Checkpoint 2.
+
+Build a markdown link so the terminal renders it as a clickable label:
 
 ```python
 python3 -c \
-"import base64,json; project='<project>'; payload={'use_case':'<use_case>','ideas':[{'name':'<name>','evaluator_type':'llm','description':'<desc>'}]}; print(f'https://console.kelet.ai/{project}/synthetics/setup?deeplink='+base64.urlsafe_b64encode(json.dumps(payload,separators=(',',':')).encode()).rstrip(b'=').decode())"
+"import base64,json; project='<project>'; payload={'use_case':'<use_case>','ideas':[{'name':'<name>','evaluator_type':'llm','description':'<desc>'}]}; url=f'https://console.kelet.ai/{project}/synthetics/setup?deeplink='+base64.urlsafe_b64encode(json.dumps(payload,separators=(',',':')).encode()).rstrip(b'=').decode(); print(f'[Open Kelet synthetic setup → {project}]({url})')"
 ```
 
-Include only evaluators the developer selected. Add `"context"` to an idea only to steer the evaluator toward
-something specific. `evaluator_type`: `"code"` = deterministic check; `"llm"` = semantic/qualitative.
+Present as a bold action item. Note: "I can't verify the project name without a key — make sure it matches what you created."
 
 ---
 

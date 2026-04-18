@@ -12,7 +12,7 @@ license: CC-BY-4.0
 metadata:
   author: kelet-ai
   url: https://kelet.ai
-  version: "1.3.11"
+  version: "1.5.0"
 allowed-tools: Read Write Edit Bash WebFetch(https://docs-ai.kelet.ai) WebFetch(https://kelet.ai)
 ---
 
@@ -151,22 +151,34 @@ Present signal findings + **complete lightweight plan**. Don't ask the developer
 
 **Present in normal mode — do NOT enter `/plan` mode yet.**
 
-Single `AskUserQuestion` with `multiSelect: true` for evaluator selection. Structure it as:
+Single `AskUserQuestion` (`multiSelect: true`), structured as:
 
-1. **Proposed synthetic evaluators** (multiSelect) — list each proposed evaluator as an option so the developer explicitly picks which ones go into the deeplink. Include "None" as an option.
+1. **Proposed synthetic evaluators** (multiSelect) — list each proposed evaluator as an option so the developer explicitly picks which ones go into the project. Include "None" as an option.
 2. **Plan approval** — "Does the rest of the plan look right?"
 3. **Keys + project name** (only what's missing):
-   - `KELET_API_KEY` (`sk-kelet-...`) — get at console.kelet.ai/api-keys
-   - Publishable key (`pk-kelet-...`) — only if VoteFeedback is in the plan
-   - Project name: **create it first** at console.kelet.ai → top-nav → New Project. Must exactly match — wrong name = silent routing failure, data goes nowhere.
+   - `KELET_API_KEY` (`sk-kelet-...`) — get at console.kelet.ai/api-keys. **Required for synthetic auto-create.**
+   - Publishable key (`pk-kelet-...`) — only if VoteFeedback is in the plan.
+   - Project name: **create it first** at console.kelet.ai → top-nav → New Project. Wrong name = silent routing failure; server returns 404 with a hint, surface it.
+4. **API key mode** (only if synthetic evaluators were selected):
+   - "Paste secret key (sk-kelet-...)" → primary auto-create.
+   - "I'll grab one" → halt: "Get a key at console.kelet.ai/api-keys (10 seconds), paste it here to continue."
+   - "I can't paste secrets here" → deeplink fallback.
 
-Ask for keys only if not already in env/config. Ask for project name only if not reliably determinable; if missing suggest a name and ask them to confirm.
+### Creating the evaluators
 
-After receiving inputs:
+**Primary (key pasted):** before the curl, print verbatim:
 
-- **Execute deeplink script with Bash** (never show as a code block). See [references/signals.md](references/signals.md).
-- Present deeplink URL as bold action item (activation can happen now or later — don't block on it).
-- Show "what you'll see" table — **only rows for items in the proposed plan:**
+> ⏳ Creating your evaluators. This takes **1–3 minutes** (sometimes up to 5) — Kelet generates each config with an LLM and runs a dedup pass. Sit tight; don't cancel.
+
+Then run per [references/signals.md § Primary: API call](references/signals.md).
+
+On 200: `✅ Kelet is now watching {project}. First evaluator results in ~3min at https://console.kelet.ai/{project}/signals`
+
+**Fallback (can't paste):** build the base64 markdown link per [references/signals.md](references/signals.md).
+
+### What you'll see
+
+Show the table — **only rows for items in the proposed plan:**
 
 | After implementing                | Visible in Kelet console                             |
 | --------------------------------- | ---------------------------------------------------- |
