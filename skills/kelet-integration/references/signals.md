@@ -127,7 +127,7 @@ curl -sS --max-time 360 \
 
 Parse output: last line = status code, everything before = body.
 
-Idea fields: `id`, `name`, `description`, `evaluator_type` (`"llm"` semantic, `"code"` deterministic). Optional: `icon`, `context` (steers the generator toward something specific).
+Include only evaluators the developer selected. Idea fields: `id`, `name`, `description`, `evaluator_type` (`"llm"` semantic, `"code"` deterministic). Optional: `icon`, `context` (steers the generator toward something specific).
 
 **Response.** Body: `created=N updated=N failed=N deduped=bool`.
 - `failed > 0` → warn: "N ideas timed out — re-run the skill to retry those."
@@ -136,6 +136,8 @@ Idea fields: `id`, `name`, `description`, `evaluator_type` (`"llm"` semantic, `"
 ### Fallback: deeplink
 
 **Only when the user declines to paste a secret key.** No project verification.
+
+URL shape: `https://console.kelet.ai/<project>/synthetics/setup?deeplink=<base64url-payload>` — substitute `<project>` with the name confirmed in Checkpoint 2.
 
 Build a markdown link so the terminal renders it as a clickable label:
 
