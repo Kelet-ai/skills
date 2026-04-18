@@ -1,0 +1,62 @@
+{
+  "run_id": "fastapi-pydantic-ai-lightweight-with_skill-iter7",
+  "eval_name": "fastapi-pydantic-ai-lightweight",
+  "config": "with_skill",
+  "summary": {"passed": 9, "failed": 0, "total": 9, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "installs_kelet",
+      "text": "kelet is present in pyproject.toml or requirements at end of integration (pre-existing or newly added)",
+      "passed": true,
+      "evidence": "Transcript Analysis Pass: 'pyproject.toml already declares kelet>=1.3.0, pydantic-ai>=1.0.15, fastapi>=0.115, redis[asyncio]>=5.2, fakeredis>=2.26.' kelet already in deps; no install needed."
+    },
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() is called at startup (not per-request)",
+      "passed": true,
+      "evidence": "changes.diff app/main.py adds 'import kelet' and 'kelet.configure()' at module scope (line 33), before the FastAPI lifespan and app creation — runs once at import."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps the agent call with the existing Redis session_id",
+      "passed": true,
+      "evidence": "changes.diff src/routers/chat.py wraps chat_agent.iter(...) in 'async with kelet.agentic_session(session_id=session.session_id):' in _run_agent_stream (POST /chat) using the Redis-owned session UUID."
+    },
+    {
+      "id": "no_voteback_no_react",
+      "text": "Does not add VoteFeedback or React (app has no React frontend)",
+      "passed": true,
+      "evidence": "Transcript: 'No React frontend — plain HTML only (no package.json, no @kelet-ai/feedback-ui).' Final State: 'Lightweight mode honored: no VoteFeedback, no coded signals, no frontend changes.' Diff touches only server files + .env/.env.example."
+    },
+    {
+      "id": "keys_in_env",
+      "text": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)",
+      "passed": true,
+      "evidence": "env_snapshot.txt contains 'KELET_API_KEY=sk-kelet-eval-test' and 'KELET_PROJECT=docs-ai-eval'; changes.diff adds the same vars to .env.example with placeholder 'sk-kelet-...'. No keys hardcoded in source (app/main.py uses kelet.configure() with no args; chat.py reads session.session_id)."
+    },
+    {
+      "id": "question_budget",
+      "text": "AskUserQuestion called at most 3 times total across the whole integration",
+      "passed": true,
+      "evidence": "questions_asked.md: 'Two AskUserQuestion calls total (within the skill's 2–3 budget).' Only Q1 (mapping confirmation) and Q2 (plan + evaluators + keys + key mode) used."
+    },
+    {
+      "id": "lightweight_mode",
+      "text": "Integration is lightweight — does not add unnecessary signals or complexity",
+      "passed": true,
+      "evidence": "Transcript Signal Analysis: 'Coded signals: no UI to wire to → 0 coded signals (lightweight default).' Only configure() + agentic_session() + 3 platform synthetics. Final State: 'Lightweight mode honored: no VoteFeedback, no coded signals, no frontend changes.'"
+    },
+    {
+      "id": "synthetics_creation_attempted",
+      "text": "Synthetic evaluator creation runs via Bash — curl POST to /api/projects/<project>/synthetics against localhost:8765 (per eval environment override). Transcript must show the localhost URL, not api.kelet.ai. Not shown as a copy-paste code block for the developer.",
+      "passed": true,
+      "evidence": "Transcript Phase III: 'curl -sS --max-time 360 -X POST \"http://localhost:8765/api/projects/docs-ai-eval/synthetics\" ...' executed via Bash; response shows '200' with 'created=0 updated=0 failed=0 deduped=false'. Localhost URL used, not api.kelet.ai."
+    },
+    {
+      "id": "api_key_mode_question_asked",
+      "text": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets) when synthetic evaluators were selected.",
+      "passed": true,
+      "evidence": "questions_asked.md Q2 item 4: 'API key mode: [x] Paste secret key (sk-kelet-...) — primary auto-create / [ ] I'll grab one later / [ ] I can't paste secrets here (deeplink fallback)' — all three options presented."
+    }
+  ]
+}

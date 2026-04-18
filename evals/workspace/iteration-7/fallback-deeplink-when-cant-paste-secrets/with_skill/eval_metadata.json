@@ -1,0 +1,8 @@
+{
+  "eval_id": 6,
+  "eval_name": "fallback-deeplink-when-cant-paste-secrets",
+  "prompt": "integrate kelet into my app",
+  "config": "with_skill",
+  "iteration": 7,
+  "stub_port": 8765
+}

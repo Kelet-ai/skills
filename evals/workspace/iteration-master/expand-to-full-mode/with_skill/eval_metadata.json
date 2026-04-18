@@ -1,0 +1,54 @@
+{
+  "task_prompt": "I want to go deeper with Kelet — add more signals and get better coverage",
+  "app_description": "FastAPI + pydantic-ai. Already has kelet.configure() and agentic_session() wired. No React frontend — server-only. Developer explicitly wants full mode: more signals, better failure coverage.",
+  "skill_version": "1.3.10",
+  "skill_branch": "master",
+  "skill_path": "/Users/almogbaku/projects/kelet/skills/evals/workspace/baseline-master",
+  "repo": "docs-ai",
+  "repo_branch": "main",
+  "eval_date": "2026-04-17",
+  "phases_completed": ["0a", "0b", "0c", "0d", "1", "V"],
+  "files_changed": ["src/routers/chat.py"],
+  "signals_added": ["agent-topic-refusal"],
+  "signals_already_present": [
+    "user-retry",
+    "agent-stream-error",
+    "user-rate-limited",
+    "session-expired",
+    "session-turn-depth",
+    "tool-search-docs",
+    "tool-get-page"
+  ],
+  "span_naming_added": true,
+  "kelet_agent_name": "docs-assistant",
+  "synthetics_deeplink_generated": true,
+  "synthetics_project": "docs_ai_prod",
+  "synthetics_evaluators": [
+    "RAG Faithfulness",
+    "Answer Relevancy",
+    "Role Adherence",
+    "Tool Usage Efficiency",
+    "Session Health Stats"
+  ],
+  "vote_feedback_added": false,
+  "vote_feedback_reason": "Server-only app, no React frontend",
+  "stack": {
+    "server": "FastAPI",
+    "llm_framework": "pydantic-ai",
+    "frontend": null,
+    "deployment": "kubernetes"
+  },
+  "key_findings": [
+    "Integration was already at a strong baseline — 7 signals across 3 files before eval",
+    "Two gaps identified: missing kelet.agent() span naming and no topic-refusal signal",
+    "No API key changes needed — K8s Secret + ConfigMap pattern already correct",
+    "Session boundary semantics clean — UUID per conversation with correct TTL expiry signaling",
+    "Synthetics cover all 5 failure categories from phase 0b workflow mapping",
+    "Single file changed (src/routers/chat.py) — minimal, targeted additions"
+  ],
+  "correctness_notes": [
+    "agent-topic-refusal uses run.result.output inspection post-stream — correct placement outside agentic_session context to avoid session context issues",
+    "kelet.agent() wrapper placed inside agentic_session and outside chat_agent.iter() — correct nesting",
+    "refusal detection uses case-insensitive 'does not cover' matching the exact system prompt refusal phrase"
+  ]
+}

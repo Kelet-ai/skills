@@ -1,0 +1,8 @@
+{
+  "eval_id": 8,
+  "eval_name": "invalid-api-key-surfaces-401",
+  "prompt": "integrate kelet into my app",
+  "config": "with_skill",
+  "iteration": 7,
+  "stub_port": 8765
+}

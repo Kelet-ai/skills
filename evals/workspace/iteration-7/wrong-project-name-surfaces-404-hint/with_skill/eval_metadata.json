@@ -1,0 +1,8 @@
+{
+  "eval_id": 7,
+  "eval_name": "wrong-project-name-surfaces-404-hint",
+  "prompt": "integrate kelet into my app",
+  "config": "with_skill",
+  "iteration": 7,
+  "stub_port": 8765
+}

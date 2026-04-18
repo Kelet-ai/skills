@@ -1,0 +1,32 @@
+{
+  "run_id": "already-has-kelet-partial-integration-with_skill",
+  "eval_name": "already-has-kelet-partial-integration",
+  "config": "with_skill (master)",
+  "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "diagnoses_missing_session",
+      "text": "Correctly identifies missing agentic_session() as the cause of unlinked traces",
+      "passed": true,
+      "evidence": "Phase 0a explicitly states 'agentic_session() is missing from both endpoints — pydantic-ai spans are each appearing as separate unlinked traces' and names it the root cause."
+    },
+    {
+      "id": "adds_agentic_session",
+      "text": "Adds agentic_session() wrapping the agent call",
+      "passed": true,
+      "evidence": "diff shows kelet.agentic_session(session_id=session.session_id) added wrapping the full _run_agent_stream body, and a UUID-based agentic_session added for GET /chat stateless path."
+    },
+    {
+      "id": "no_redundant_setup",
+      "text": "Does not re-ask for API keys or project name already configured. Fixing a broken/wrong method is acceptable and does NOT count as redundant.",
+      "passed": true,
+      "evidence": "Phase 1 confirms keys are already set in .env and moves on without re-prompting; the skill adds kelet.configure() which was genuinely missing (not re-asking for keys already present)."
+    },
+    {
+      "id": "phase_v_verification",
+      "text": "Includes verification step: trigger LLM call and check console for sessions",
+      "passed": true,
+      "evidence": "Phase V includes an explicit smoke test: 'Trigger a chat message → open https://console.kelet.ai → navigate to Sessions. You should see a session with the UUID from the X-Session-ID response header.'"
+    }
+  ]
+}

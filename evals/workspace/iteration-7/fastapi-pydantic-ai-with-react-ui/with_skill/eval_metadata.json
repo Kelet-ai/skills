@@ -1,0 +1,8 @@
+{
+  "eval_id": 4,
+  "eval_name": "fastapi-pydantic-ai-with-react-ui",
+  "prompt": "integrate kelet into my app",
+  "config": "with_skill",
+  "iteration": 7,
+  "stub_port": 8765
+}

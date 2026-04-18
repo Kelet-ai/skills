@@ -1,0 +1,32 @@
+{
+  "run_id": "session-id-boundary-check-with_skill",
+  "eval_name": "session-id-boundary-check",
+  "config": "with_skill (master)",
+  "summary": {"passed": 3, "failed": 1, "total": 4, "pass_rate": 0.75},
+  "expectations": [
+    {
+      "id": "detects_session_mismatch",
+      "text": "Surfaces the issue that phone number outlives sessions and cannot be used as session_id",
+      "passed": true,
+      "evidence": "Phase 0a explicitly flags the mismatch: phone number is stable across all conversations and using it as session_id would make fresh-start resets invisible to Kelet, with all conversations appearing as one unending session."
+    },
+    {
+      "id": "proposes_uuid_fix",
+      "text": "Proposes generating a UUID per conversation (not using phone as session_id)",
+      "passed": true,
+      "evidence": "Skill proposed adding `kelet_session_id: str` (UUID) to ChatSession, a `reset_session()` function that regenerates the UUID on fresh start, and diff confirms this was implemented in src/cache/__init__.py."
+    },
+    {
+      "id": "uses_user_id_param",
+      "text": "Phone is PII — skill correctly omits user_id= without asking the developer about it. NOTE: the master skill wires phone as user_id= — this counts as a FAIL since the new policy is to omit PII identifiers.",
+      "passed": false,
+      "evidence": "Master skill wired phone_number directly as `user_id=body.phone_number` in agentic_session(), explicitly surfaced in the diff and verification checklist — PII is passed as user_id rather than omitted."
+    },
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() is still added at startup",
+      "passed": true,
+      "evidence": "diff shows `import kelet` and `kelet.configure()` added at module level in app/main.py, before the lifespan/app creation."
+    }
+  ]
+}

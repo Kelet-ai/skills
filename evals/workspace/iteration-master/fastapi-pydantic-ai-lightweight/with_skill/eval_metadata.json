@@ -1,0 +1,30 @@
+{
+  "eval_name": "fastapi-pydantic-ai-lightweight",
+  "skill_version": "1.3.10",
+  "skill_branch": "master",
+  "skill_path": "/Users/almogbaku/projects/kelet/skills/evals/workspace/baseline-master",
+  "repo": "/Users/almogbaku/projects/kelet/docs-ai",
+  "repo_branch": "without-kelet",
+  "prompt": "integrate kelet into my app",
+  "app_description": "FastAPI backend using pydantic-ai. Sessions stored in Redis (session_id generated server-side, returned in X-Session-ID response header). No React frontend — plain HTML. Deployed on Fly.io.",
+  "run_at": "2026-04-17T20:14:11Z",
+  "mode": "with_skill",
+  "questions_asked": 3,
+  "phases_completed": ["0a", "0b", "0c", "0d", "1", "impl", "V"],
+  "files_changed": [
+    ".env",
+    "app/main.py",
+    "src/routers/chat.py",
+    "src/settings/__init__.py"
+  ],
+  "synthetic_evaluators": ["Task Completion", "RAG Faithfulness"],
+  "deeplink_generated": true,
+  "react_added": false,
+  "kelet_already_in_deps": true,
+  "session_id_source": "Redis UUID4 (server-generated)",
+  "agentic_session_required": true,
+  "agentic_session_wired": true,
+  "streaming_wrapped_correctly": true,
+  "stateless_endpoint_wrapped": true,
+  "settings_fields_removed": ["kelet_project", "kelet_api_key"]
+}

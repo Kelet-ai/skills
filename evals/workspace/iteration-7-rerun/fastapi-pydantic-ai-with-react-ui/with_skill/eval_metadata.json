@@ -1,0 +1,9 @@
+{
+  "eval_id": 4,
+  "eval_name": "fastapi-pydantic-ai-with-react-ui",
+  "prompt": "integrate kelet into my app",
+  "config": "with_skill",
+  "iteration": "7-rerun",
+  "stub_port": 8765,
+  "purpose": "Verify Sessions-section fix removes agentic_session_wired regression"
+}

@@ -1,0 +1,17 @@
+{
+  "eval_start_utc": "2026-04-17T20:11:04Z",
+  "eval_end_utc": "2026-04-17T20:12:52Z",
+  "total_seconds": 108,
+  "phase_breakdown": {
+    "file_exploration": 18,
+    "phase_0a_mapping": 22,
+    "phase_0b_workflow": 12,
+    "phase_0c_signals": 14,
+    "phase_0d_preview": 5,
+    "phase_1_keys": 8,
+    "implementation": 20,
+    "phase_v_verification": 9
+  },
+  "turns": 11,
+  "simulated": true
+}

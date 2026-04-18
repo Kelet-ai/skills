@@ -1,0 +1,369 @@
+diff --git a/.env b/.env
+new file mode 100644
+--- /dev/null
++++ b/.env
+@@ -0,0 +1,4 @@
++KELET_API_KEY=kelet_sk_test_abc123
++KELET_PROJECT=chat_assistant_prod
++VITE_KELET_PUBLISHABLE_KEY=kelet_pk_test_def456
++VITE_KELET_PROJECT=chat_assistant_prod
+
+diff --git a/.gitignore b/.gitignore
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,5 @@
+ __pycache__/
+ .venv/
+ *.pyc
++KELET_API_KEY
++VITE_KELET_PUBLISHABLE_KEY
+
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..3b42887 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -3,6 +3,7 @@ import logging
+ from contextlib import asynccontextmanager
+ from typing import cast
+
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -15,6 +16,9 @@ from settings import settings
+
+ logger = logging.getLogger(__name__)
+
++# Initialize Kelet — reads KELET_API_KEY and KELET_PROJECT from environment
++kelet.configure()
++
+
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+
+diff --git a/src/cache/__init__.py b/src/cache/__init__.py
+index a1b2c3d..e4f5a6b 100644
+--- a/src/cache/__init__.py
++++ b/src/cache/__init__.py
+@@ -1,8 +1,9 @@
+ """Redis ChatSession CRUD for docs-ai. No org/project scope (public service)."""
+ import json
+ import uuid
+-from dataclasses import dataclass, field
++from dataclasses import dataclass, field, replace
+
+ from redis.asyncio import Redis
+
+ _SESSION_PREFIX = "docs-ai:session:"
+
+
+ def _key(session_id: str) -> str:
+     return f"{_SESSION_PREFIX}{session_id}"
+
+
+ @dataclass
+ class ChatSession:
+     session_id: str
++    kelet_session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+     history: str = field(default_factory=lambda: "[]")  # pydantic-ai messages_json
+
+
+ async def create_session(redis: Redis, ttl: int) -> ChatSession:
+     session_id = str(uuid.uuid4())
+     session = ChatSession(session_id=session_id)
+     await save_session(redis, session, ttl)
+     return session
+
+
++async def reset_session(redis: Redis, session: ChatSession, ttl: int) -> ChatSession:
++    """Start a fresh conversation for the same session_id — clears history and issues a new kelet_session_id.
++
++    Phone number is the stable user anchor (passed as user_id= to agentic_session).
++    kelet_session_id is the per-conversation UUID Kelet uses as the session boundary.
++    Regenerating it on reset ensures Kelet sees distinct conversations, not one endless session.
++    """
++    new_session = ChatSession(session_id=session.session_id)  # new kelet_session_id auto-generated
++    await save_session(redis, new_session, ttl)
++    return new_session
++
++
+ async def get_session(redis: Redis, session_id: str) -> ChatSession | None:
+     raw = await redis.get(_key(session_id))
+     if raw is None:
+         return None
+     data = json.loads(raw)
+-    return ChatSession(session_id=data["session_id"], history=data.get("history", "[]"))
++    return ChatSession(
++        session_id=data["session_id"],
++        kelet_session_id=data.get("kelet_session_id", str(uuid.uuid4())),
++        history=data.get("history", "[]"),
++    )
+
+
+ async def save_session(redis: Redis, session: ChatSession, ttl: int) -> None:
+     await redis.setex(
+         _key(session.session_id),
+         ttl,
+-        json.dumps({"session_id": session.session_id, "history": session.history}),
++        json.dumps({
++            "session_id": session.session_id,
++            "kelet_session_id": session.kelet_session_id,
++            "history": session.history,
++        }),
+     )
+
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..c7d8e91 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -1,8 +1,10 @@
+ """Chat endpoints — POST /chat (session, SSE) and GET /chat (stateless, plain text)."""
+ import json
+ import logging
++import uuid
+ from typing import AsyncGenerator
+
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -11,7 +13,7 @@ from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, TextPar
+ from redis.asyncio import Redis
+
+ from agent import chat_agent, DocsDeps
+-from cache import ChatSession, create_session, get_session, save_session
++from cache import ChatSession, create_session, get_session, save_session, reset_session
+ from docs_loader import docs_cache
+ from rate_limiter import check_rate_limit
+ from settings import settings
+@@ -20,6 +22,15 @@ logger = logging.getLogger(__name__)
+ router = APIRouter()
+
+
++def _count_turns(messages_json: str) -> int:
++    """Count completed assistant turns in the session history."""
++    try:
++        msgs = json.loads(messages_json)
++        return sum(1 for m in msgs if isinstance(m, dict) and m.get("role") == "model")
++    except Exception:
++        return 0
++
++
+ class ChatRequest(BaseModel):
+     message: str = Field(min_length=1, max_length=4000)
+     session_id: str | None = None
+     current_page_slug: str | None = None
++    phone_number: str | None = None
++    # NOTE: phone_number is the stable user identity — it outlives individual conversations.
++    # It is passed as user_id= to agentic_session(), NOT as session_id.
++    # session_id in this request body is the Redis key (app-level session).
++    # kelet_session_id (per-conversation UUID) is resolved from the ChatSession and passed to agentic_session().
+
+
+ async def _run_agent_stream(
+@@ -32,14 +44,25 @@ async def _run_agent_stream(
+     message_history: list[ModelMessage],
+     session: ChatSession,
+     redis: Redis,
++    user_id: str | None = None,
++    is_retry: bool = False,
+ ) -> AsyncGenerator[str, None]:
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
++        async with kelet.agentic_session(session_id=session.kelet_session_id, user_id=user_id):
++            # Emit retry signal when the user sends another message on an existing session
++            if is_retry:
++                await kelet.signal(
++                    "EVENT",
++                    "HUMAN",
++                    trigger_name="user-retry",
++                    score=0.0,
++                )
++
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
+             async for node in run:
+                 if Agent.is_model_request_node(node):
+                     node_emitted = False
+@@ -60,6 +83,13 @@ async def _run_agent_stream(
+             if run.result is not None:
+                 messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
++        await kelet.signal(
++            "EVENT",
++            "LABEL",
++            session_id=session.kelet_session_id,
++            trigger_name="agent-stream-error",
++            score=0.0,
++        )
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+         return
+
+@@ -110,6 +140,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+     # Session resolve — auto-create on missing/expired (no 404)
+     session: ChatSession | None = None
+     is_retry = False
++    session_was_expired = False
+     if body.session_id:
+         session = await get_session(redis, body.session_id)
+         if session is not None:
+@@ -118,6 +149,19 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
++        else:
++            # Client sent a session_id that no longer exists (TTL expired or invalid).
++            # Signal so Kelet can distinguish cold-start failures from mid-conversation context loss.
++            session_was_expired = True
+     if session is None:
+         session = await create_session(redis, settings.session_ttl_seconds)
+
++    if session_was_expired:
++        await kelet.signal(
++            "EVENT",
++            "HUMAN",
++            session_id=session.kelet_session_id,
++            trigger_name="session-expired",
++            score=0.0,
++            metadata={"provided_session_id": body.session_id},
++        )
++
+     message_history = ModelMessagesTypeAdapter.validate_json(session.history)
+
+     deps = DocsDeps(
+@@ -132,7 +176,7 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+     )
+
+     return StreamingResponse(
+-        _run_agent_stream(body.message, deps, message_history, session, redis),
++        _run_agent_stream(body.message, deps, message_history, session, redis, user_id=body.phone_number, is_retry=is_retry),
+         media_type="text/event-stream",
+         headers={
+             "Cache-Control": "no-cache",
+             "X-Accel-Buffering": "no",
+-            "X-Session-ID": session.session_id,
++            "X-Session-ID": session.kelet_session_id,
+         },
+     )
+
+diff --git a/frontend/src/main.tsx b/frontend/src/main.tsx
+new file mode 100644
+--- /dev/null
++++ b/frontend/src/main.tsx
+@@ -0,0 +1,15 @@
++import React from 'react'
++import ReactDOM from 'react-dom/client'
++import { KeletProvider } from '@kelet-ai/feedback-ui'
++import App from './App'
++
++ReactDOM.createRoot(document.getElementById('root')!).render(
++  <React.StrictMode>
++    <KeletProvider
++      apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY}
++      project={import.meta.env.VITE_KELET_PROJECT}
++    >
++      <App />
++    </KeletProvider>
++  </React.StrictMode>
++)
+
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+new file mode 100644
+--- /dev/null
++++ b/frontend/src/App.tsx
+@@ -0,0 +1,80 @@
++import { useEffect, useState } from 'react'
++import { VoteFeedback, useKeletSignal } from '@kelet-ai/feedback-ui'
++
++interface Message { role: 'user' | 'assistant'; content: string }
++
++function AssistantMessage({ content, sessionId }: { content: string; sessionId: string }) {
++  return (
++    <div>
++      <span>{content}</span>
++      {sessionId && (
++        <div style={{ position: 'relative' }}>
++          <VoteFeedback.Root session_id={sessionId}>
++            <VoteFeedback.UpvoteButton>▲</VoteFeedback.UpvoteButton>
++            <VoteFeedback.DownvoteButton>▼</VoteFeedback.DownvoteButton>
++            <VoteFeedback.Popover
++              style={{
++                position: 'absolute',
++                bottom: 'calc(100% + 8px)',
++                left: 0,
++                zIndex: 10,
++              }}
++            >
++              <VoteFeedback.Textarea placeholder="What went wrong? (optional)" />
++              <VoteFeedback.SubmitButton>Submit</VoteFeedback.SubmitButton>
++            </VoteFeedback.Popover>
++          </VoteFeedback.Root>
++        </div>
++      )}
++    </div>
++  )
++}
++
++export default function App() {
++  const [messages, setMessages] = useState<Message[]>([])
++  const [input, setInput] = useState('')
++  const [sessionId, setSessionId] = useState<string>('')
++  const [appSessionId, setAppSessionId] = useState<string>('')
++  const sendSignal = useKeletSignal()
++
++  // Abandon signal: fire when tab/window closes mid-session
++  useEffect(() => {
++    const handleUnload = () => {
++      if (sessionId && messages.length > 0) {
++        sendSignal({
++          session_id: sessionId,
++          kind: 'EVENT',
++          source: 'HUMAN',
++          trigger_name: 'user-abandon',
++          score: 0.0,
++        })
++      }
++    }
++    window.addEventListener('beforeunload', handleUnload)
++    return () => window.removeEventListener('beforeunload', handleUnload)
++  }, [sessionId, messages.length, sendSignal])
++
++  const send = async () => {
++    const res = await fetch('/api/chat', {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({
++        message: input,
++        session_id: appSessionId || undefined,
++        // phone_number is resolved server-side from auth context in production;
++        // passed here for eval purposes only
++      }),
++    })
++    // X-Session-ID is the kelet_session_id (per-conversation UUID) — NOT the phone number
++    const sid = res.headers.get('X-Session-ID')
++    if (sid) setSessionId(sid)
++    const newAppSid = res.headers.get('X-App-Session-ID')
++    if (newAppSid) setAppSessionId(newAppSid)
++    const reader = res.body!.getReader()
++    // ... SSE streaming logic ...
++    setMessages(m => [...m, { role: 'user', content: input }, { role: 'assistant', content: '...' }])
++    setInput('')
++  }
++
++  return (
++    <div>
++      <div>
++        {messages.map((m, i) =>
++          m.role === 'user'
++            ? <div key={i}>{m.content}</div>
++            : <AssistantMessage key={i} content={m.content} sessionId={sessionId} />
++        )}
++      </div>
++      <input value={input} onChange={e => setInput(e.target.value)} />
++      <button onClick={send}>Send</button>
++    </div>
++  )
++}

@@ -1,0 +1,38 @@
+{
+  "run_id": "expand-to-full-mode-with_skill",
+  "eval_name": "expand-to-full-mode",
+  "config": "with_skill (master)",
+  "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "no_repeat_basic_setup",
+      "text": "Does not re-add configure() or agentic_session() that are already correctly wired — skips already-done work. Fixing/improving existing wiring is acceptable.",
+      "passed": true,
+      "evidence": "Phase 0a confirms both kelet.configure() and agentic_session() are already wired; the diff only adds kelet.agent() and the agent-topic-refusal signal — no re-addition of configure() or agentic_session()."
+    },
+    {
+      "id": "proposes_additional_signals",
+      "text": "Proposes at least one additional coded signal beyond what's already in place",
+      "passed": true,
+      "evidence": "agent-topic-refusal coded signal proposed and implemented, firing when the agent output contains the refusal pattern to cover the F4/F5 false-refusal failure mode."
+    },
+    {
+      "id": "expands_synthetics",
+      "text": "Proposes more synthetic evaluators than the default Task Completion alone",
+      "passed": true,
+      "evidence": "Five synthetic evaluators proposed: RAG Faithfulness, Answer Relevancy, Role Adherence, Tool Usage Efficiency, and Session Health Stats — well beyond a single Task Completion evaluator."
+    },
+    {
+      "id": "no_votefeedback_no_react",
+      "text": "Does not propose adding a new React frontend or installing React from scratch — app has no React frontend. Extending an existing React setup if found in the repo is acceptable.",
+      "passed": true,
+      "evidence": "Phase 0c explicitly states 'No React frontend, no feedback UI. VoteFeedback doesn't apply. No explicit signals to add.' and Phase V confirms 'No React frontend — no VoteFeedback checks needed.'"
+    },
+    {
+      "id": "explains_value",
+      "text": "Explains what each new signal or evaluator catches — not just lists them",
+      "passed": true,
+      "evidence": "Each proposal includes explicit failure-mode coverage (e.g., agent-topic-refusal 'catches F4+F5 — both hallucination-prevention refusals and false refusals'; each synthetic evaluator is mapped to a named failure category with description of what it detects)."
+    }
+  ]
+}

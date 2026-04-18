@@ -8,7 +8,7 @@
       "app_description": "FastAPI backend using pydantic-ai. Sessions stored in Redis (session_id generated server-side, returned in X-Session-ID response header). No React frontend — plain HTML. Deployed on Fly.io.",
       "repo": "../docs-ai",
       "repo_branch": "without-kelet",
-      "expected_output": "Minimal integration: kelet.configure() at startup + agentic_session() wired to Redis session_id + managed synthetics deeplink. No VoteFeedback (no React). At most 2 AskUserQuestion calls. Keys/project collected in one question.",
+      "expected_output": "Minimal integration: kelet.configure() at startup + agentic_session() wired to Redis session_id + managed synthetics auto-created via curl. No VoteFeedback (no React). At most 2 AskUserQuestion calls. Keys/project collected in one question. Simulated user pastes `sk-kelet-eval-test` at the key-mode question → primary curl → 200 → success banner rendered.",
       "assertions": [
         {
           "id": "installs_kelet",
@@ -46,8 +46,13 @@
           "type": "llm"
         },
         {
-          "id": "deeplink_generated",
-          "description": "Synthetic evaluator deeplink is generated via Bash execution (not shown as copy-paste code block)",
+          "id": "synthetics_creation_attempted",
+          "description": "Synthetic evaluator creation runs via Bash — curl POST to /api/projects/<project>/synthetics against localhost:8765 (per eval environment override). Transcript must show the localhost URL, not api.kelet.ai. Not shown as a copy-paste code block for the developer.",
+          "type": "llm"
+        },
+        {
+          "id": "api_key_mode_question_asked",
+          "description": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets) when synthetic evaluators were selected.",
           "type": "llm"
         }
       ]
@@ -122,7 +127,7 @@
       "app_description": "FastAPI backend + pydantic-ai agent. React frontend (Vite). Plain chat UI — messages in, AI responses out. No feedback buttons at all. Session ID generated server-side, returned in X-Session-ID response header, stored in React state. Deployed on Vercel (frontend) + Fly.io (backend).",
       "repo": "../docs-ai",
       "repo_branch": "without-kelet",
-      "expected_output": "Full integration: kelet.configure() + agentic_session() on server. KeletProvider at React root with publishable key. VoteFeedback added next to AI messages (skill adds it from scratch — no existing buttons to wire to). Session ID from X-Session-ID header passed to VoteFeedback. Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY in env. VoteFeedback styled to match app theme. Deeplink generated.",
+      "expected_output": "Full integration: kelet.configure() + agentic_session() on server. KeletProvider at React root with publishable key. VoteFeedback added next to AI messages (skill adds it from scratch — no existing buttons to wire to). Session ID from X-Session-ID header passed to VoteFeedback. Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY in env. VoteFeedback styled to match app theme. Simulated user pastes `sk-kelet-eval-test` at the key-mode question → primary curl → 200 → success banner rendered.",
       "assertions": [
         {
           "id": "configure_called",
@@ -161,12 +166,17 @@
         },
         {
           "id": "implicit_fe_signals",
-          "description": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback — e.g. useKeletSignal for copy-to-clipboard on AI output, message retry, or session abandon. Does not just stop at VoteFeedback.",
+          "description": "Skill considers at least one additional implicit frontend signal beyond VoteFeedback (e.g. useKeletSignal for copy-to-clipboard, retry, or session abandon) — either wiring it, or explicitly proposing it in the plan and deferring with a rationale. A silent omission (no mention at all) fails; an informed 'deferred to keep scaffold minimal' passes.",
           "type": "llm"
         },
         {
-          "id": "deeplink_generated",
-          "description": "Synthetic evaluator deeplink generated via Bash (not shown as code block)",
+          "id": "synthetics_creation_attempted",
+          "description": "Synthetic evaluator creation runs via Bash — curl POST to /api/projects/<project>/synthetics against localhost:8765 (per eval environment override). Transcript must show the localhost URL, not api.kelet.ai. Not shown as a copy-paste code block for the developer.",
+          "type": "llm"
+        },
+        {
+          "id": "api_key_mode_question_asked",
+          "description": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets) when synthetic evaluators were selected.",
           "type": "llm"
         }
       ]
@@ -203,6 +213,94 @@
         {
           "id": "explains_value",
           "description": "Explains what each new signal or evaluator catches — not just lists them",
+          "type": "llm"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "fallback-deeplink-when-cant-paste-secrets",
+      "prompt": "integrate kelet into my app",
+      "app_description": "FastAPI backend using pydantic-ai. Sessions stored in Redis (session_id generated server-side, returned in X-Session-ID response header). No React frontend — plain HTML. Deployed on Fly.io. NOTE: the developer will explicitly choose 'I can't paste secrets here' at the key-mode AskUserQuestion.",
+      "repo": "../docs-ai",
+      "repo_branch": "without-kelet",
+      "expected_output": "Lightweight integration like eval #1, but at Checkpoint 2 the simulated user picks 'I can't paste secrets here' → fallback deeplink path → base64url-encoded markdown link to console.kelet.ai/<project>/synthetics/setup?deeplink=... rendered. No curl to localhost or api.kelet.ai on the auto-create endpoint. Skill warns the developer it can't verify the project name without a key.",
+      "assertions": [
+        {
+          "id": "api_key_mode_question_asked",
+          "description": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets).",
+          "type": "llm"
+        },
+        {
+          "id": "fallback_deeplink_generated",
+          "description": "Synthetic evaluator fallback deeplink is generated via Bash — base64url-encoded markdown link to console.kelet.ai/<project>/synthetics/setup?deeplink=. Not shown as a copy-paste code block.",
+          "type": "llm"
+        },
+        {
+          "id": "no_curl_to_api",
+          "description": "No curl invocation to api.kelet.ai or localhost on the auto-create endpoint — the user declined to paste a key, so the primary curl path must be skipped entirely.",
+          "type": "llm"
+        },
+        {
+          "id": "project_name_unverified_warning",
+          "description": "Skill surfaces the 'I can't verify the project name without a key' caveat to the developer.",
+          "type": "llm"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "wrong-project-name-surfaces-404-hint",
+      "prompt": "integrate kelet into my app",
+      "app_description": "FastAPI backend using pydantic-ai. Sessions in Redis. No React. Deployed on Fly.io. NOTE: the developer gives 'not-a-real-project' as the project name at Checkpoint 2 and pastes `sk-kelet-eval-test` when asked. On the recovery prompt, they correct to a valid project name (e.g. 'my-real-project').",
+      "repo": "../docs-ai",
+      "repo_branch": "without-kelet",
+      "expected_output": "Skill runs primary curl with project='not-a-real-project' → gets 404 project_not_found → surfaces the server hint ('Create it first at console.kelet.ai → New Project') to the developer and asks what to do next (AskUserQuestion with recovery options). Simulated user picks 're-enter project name' → gives 'my-real-project' → skill re-curls → 200. Final state: synthetics created, success banner rendered.",
+      "assertions": [
+        {
+          "id": "detects_404_project_not_found",
+          "description": "Skill parses the 404 response and recognizes project_not_found.",
+          "type": "llm"
+        },
+        {
+          "id": "surfaces_server_hint",
+          "description": "Server hint string ('Create it first at console.kelet.ai → New Project, then re-run.') is shown to the developer — not swallowed or paraphrased away.",
+          "type": "llm"
+        },
+        {
+          "id": "asks_recovery_question",
+          "description": "After the 404, the skill asks the developer what to do next (re-enter project name, or halt to create it first) via AskUserQuestion — does not silently give up or blindly retry.",
+          "type": "llm"
+        },
+        {
+          "id": "recovers_on_correction",
+          "description": "After the developer provides a valid project name, the skill re-runs the curl and reaches the success banner.",
+          "type": "llm"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "invalid-api-key-surfaces-401",
+      "prompt": "integrate kelet into my app",
+      "app_description": "FastAPI backend using pydantic-ai. Sessions in Redis. No React. Deployed on Fly.io. NOTE: the developer pastes the invalid key 'sk-typo-wrong' first. On the recovery prompt they correct to 'sk-kelet-eval-test'.",
+      "repo": "../docs-ai",
+      "repo_branch": "without-kelet",
+      "expected_output": "Skill runs primary curl with a malformed key → gets 401 → tells the developer the key looks invalid and re-prompts for it. Simulated user pastes 'sk-kelet-eval-test' → skill re-curls → 200 → success banner rendered.",
+      "assertions": [
+        {
+          "id": "detects_401_invalid_key",
+          "description": "Skill parses the 401 response and recognizes the key as invalid.",
+          "type": "llm"
+        },
+        {
+          "id": "reprompts_for_key",
+          "description": "Skill re-prompts the developer for a corrected API key — does not silently give up or fall back to the deeplink path.",
+          "type": "llm"
+        },
+        {
+          "id": "recovers_on_correction",
+          "description": "After a valid key is provided, the skill re-runs the curl and reaches the success banner.",
           "type": "llm"
         }
       ]

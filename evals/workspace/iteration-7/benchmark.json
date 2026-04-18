@@ -1,0 +1,86 @@
+{
+  "skill_name": "kelet-integration",
+  "metadata": {
+    "iteration": 7,
+    "purpose": "v1.4.0 auto-create flow coverage with dummy_server.py stub"
+  },
+  "run_summary": [
+    {
+      "configuration": "with_skill (iter7)",
+      "mean_pass_rate": 0.98,
+      "n_evals": 5
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "fastapi-pydantic-ai-lightweight-with_skill-iter7",
+      "eval_name": "fastapi-pydantic-ai-lightweight",
+      "configuration": "with_skill (iter7)",
+      "summary": {"passed": 9, "failed": 0, "total": 9, "pass_rate": 1.0},
+      "expectations": [
+        {"id": "installs_kelet", "text": "kelet is present in pyproject.toml or requirements at end of integration (pre-existing or newly added)", "passed": true, "evidence": "Transcript Analysis Pass: 'pyproject.toml already declares kelet>=1.3.0, pydantic-ai>=1.0.15, fastapi>=0.115, redis[asyncio]>=5.2, fakeredis>=2.26.' kelet already in deps; no install needed."},
+        {"id": "configure_called", "text": "kelet.configure() is called at startup (not per-request)", "passed": true, "evidence": "changes.diff app/main.py adds 'import kelet' and 'kelet.configure()' at module scope (line 33), before the FastAPI lifespan and app creation — runs once at import."},
+        {"id": "agentic_session_wired", "text": "agentic_session() wraps the agent call with the existing Redis session_id", "passed": true, "evidence": "changes.diff src/routers/chat.py wraps chat_agent.iter(...) in 'async with kelet.agentic_session(session_id=session.session_id):' in _run_agent_stream (POST /chat) using the Redis-owned session UUID."},
+        {"id": "no_voteback_no_react", "text": "Does not add VoteFeedback or React (app has no React frontend)", "passed": true, "evidence": "Transcript: 'No React frontend — plain HTML only (no package.json, no @kelet-ai/feedback-ui).' Final State: 'Lightweight mode honored: no VoteFeedback, no coded signals, no frontend changes.' Diff touches only server files + .env/.env.example."},
+        {"id": "keys_in_env", "text": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)", "passed": true, "evidence": "env_snapshot.txt contains 'KELET_API_KEY=sk-kelet-eval-test' and 'KELET_PROJECT=docs-ai-eval'; changes.diff adds the same vars to .env.example with placeholder 'sk-kelet-...'. No keys hardcoded in source."},
+        {"id": "question_budget", "text": "AskUserQuestion called at most 3 times total across the whole integration", "passed": true, "evidence": "questions_asked.md: 'Two AskUserQuestion calls total (within the skill's 2–3 budget).' Only Q1 (mapping confirmation) and Q2 (plan + evaluators + keys + key mode) used."},
+        {"id": "lightweight_mode", "text": "Integration is lightweight — does not add unnecessary signals or complexity", "passed": true, "evidence": "Transcript Signal Analysis: 'Coded signals: no UI to wire to → 0 coded signals (lightweight default).' Only configure() + agentic_session() + 3 platform synthetics."},
+        {"id": "synthetics_creation_attempted", "text": "Synthetic evaluator creation runs via Bash — curl POST to /api/projects/<project>/synthetics against localhost:8765. Transcript must show the localhost URL, not api.kelet.ai. Not shown as a copy-paste code block for the developer.", "passed": true, "evidence": "Transcript Phase III: 'curl -sS --max-time 360 -X POST \"http://localhost:8765/api/projects/docs-ai-eval/synthetics\" ...' executed via Bash; response '200' with 'created=0 updated=0 failed=0 deduped=false'."},
+        {"id": "api_key_mode_question_asked", "text": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets) when synthetic evaluators were selected.", "passed": true, "evidence": "questions_asked.md Q2 item 4: 'API key mode: [x] Paste secret key (sk-kelet-...) / [ ] I'll grab one later / [ ] I can't paste secrets here (deeplink fallback)'."}
+      ]
+    },
+    {
+      "run_id": "fastapi-pydantic-ai-with-react-ui-with_skill-iter7",
+      "eval_name": "fastapi-pydantic-ai-with-react-ui",
+      "configuration": "with_skill (iter7)",
+      "summary": {"passed": 9, "failed": 1, "total": 10, "pass_rate": 0.9},
+      "expectations": [
+        {"id": "configure_called", "text": "kelet.configure() added at server startup", "passed": true, "evidence": "changes.diff app/main.py line 36: 'kelet.configure(api_key=settings.kelet_api_key, project=settings.kelet_project)' added at module scope."},
+        {"id": "agentic_session_wired", "text": "agentic_session() wraps agent call with session_id", "passed": false, "evidence": "changes.diff contains NO agentic_session() call. src/routers/chat.py is untouched. Transcript Checkpoint 2: 'pydantic-ai is auto-instrumented, so no agentic_session() wrapper is required'. Skill intentionally skipped wiring the app-owned session_id — gap against the eval's expected output."},
+        {"id": "kelet_provider_added", "text": "KeletProvider added at React root with publishable key", "passed": true, "evidence": "changes.diff frontend/src/main.tsx: '<KeletProvider apiKey={publishableKey} project={project}><App /></KeletProvider>' where 'const publishableKey = import.meta.env.VITE_KELET_PUBLISHABLE_KEY'."},
+        {"id": "votefeedback_added", "text": "VoteFeedback component added next to AI message output (not a floating widget or separate page)", "passed": true, "evidence": "changes.diff frontend/src/App.tsx places <VoteFeedback.Root session_id={sessionIdRef.current}> with UpvoteButton/DownvoteButton directly inside the 'msg ai' div, below each AI message's text."},
+        {"id": "session_id_propagated", "text": "Session ID from X-Session-ID response header is captured in React state and passed to VoteFeedback sessionId prop", "passed": true, "evidence": "changes.diff App.tsx: 'const sid = res.headers.get(\"X-Session-ID\"); if (sid) sessionIdRef.current = sid;' and '<VoteFeedback.Root session_id={sessionIdRef.current}>'."},
+        {"id": "both_keys_in_env", "text": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY are present in .env at end of integration (either pre-existing or newly added). Neither hardcoded in source.", "passed": true, "evidence": "Transcript: '.env — set KELET_API_KEY=sk-kelet-eval-test' and 'frontend/.env — VITE_KELET_PUBLISHABLE_KEY=pk-kelet-eval-test, VITE_KELET_PROJECT=docs-ai-react-eval'. changes.diff adds frontend/.env.example with 'VITE_KELET_PUBLISHABLE_KEY=pk-kelet-...' placeholder. No keys hardcoded in source."},
+        {"id": "on_brand_ui", "text": "VoteFeedback is placed and configured to look natural in the chat UI — not a jarring out-of-place widget. Skill checks existing styles/theme and passes appropriate props or classnames.", "passed": true, "evidence": "changes.diff frontend/src/styles.css defines dark-palette tokens (--bg, --panel, --panel-2, --border, --accent) and styles '.msg.ai .feedback button' with 'background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); padding: 4px 8px; border-radius: 8px;' — matching the chat bubble palette."},
+        {"id": "implicit_fe_signals", "text": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback — e.g. useKeletSignal for copy-to-clipboard on AI output, message retry, or session abandon. Does not just stop at VoteFeedback.", "passed": false, "evidence": "Signal Analysis Pass: 'Coded signals (frontend): propose VoteFeedback (👍/👎) since we're adding the UI anyway. No edits ... and no retry button yet — skip both for lightweight.' changes.diff App.tsx contains no useKeletSignal, copy button, retry, or abandon handler. Only VoteFeedback is wired."},
+        {"id": "synthetics_creation_attempted", "text": "Synthetic evaluator creation runs via Bash — curl POST to /api/projects/<project>/synthetics against localhost:8765. Transcript must show the localhost URL, not api.kelet.ai. Not shown as a copy-paste code block for the developer.", "passed": true, "evidence": "Transcript 'Creating the evaluators': 'curl ... -X POST \"http://localhost:8765/api/projects/docs-ai-react-eval/synthetics\" ...' → 'Response: created=3 updated=0 failed=0 deduped=false 200'."},
+        {"id": "api_key_mode_question_asked", "text": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets) when synthetic evaluators were selected.", "passed": true, "evidence": "questions_asked.md Checkpoint 2 includes 'Key mode: Paste secret key → primary API auto-create' as the selected option among the three-option key-mode question."}
+      ]
+    },
+    {
+      "run_id": "fallback-deeplink-when-cant-paste-secrets-with_skill-iter7",
+      "eval_name": "fallback-deeplink-when-cant-paste-secrets",
+      "configuration": "with_skill (iter7)",
+      "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0},
+      "expectations": [
+        {"id": "api_key_mode_question_asked", "text": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets).", "passed": true, "evidence": "Transcript Checkpoint 2 item 4: 'API key mode: - Paste secret key (sk-kelet-...) — primary path. - I'll grab one. - I can't paste secrets here.' Developer picked the third option."},
+        {"id": "fallback_deeplink_generated", "text": "Synthetic evaluator fallback deeplink is generated via Bash — base64url-encoded markdown link to console.kelet.ai/<project>/synthetics/setup?deeplink=. Not shown as a copy-paste code block.", "passed": true, "evidence": "Transcript renders inline markdown link '[Open Kelet synthetic setup → docs-ai-fallback](https://console.kelet.ai/docs-ai-fallback/synthetics/setup?deeplink=eyJ1c2VfY2FzZSI6...)' as a clickable link not inside a code block."},
+        {"id": "no_curl_to_api", "text": "No curl invocation to api.kelet.ai or localhost on the auto-create endpoint — the user declined to paste a key, so the primary curl path must be skipped entirely.", "passed": true, "evidence": "Transcript: 'No network call was made from this session — no curl to api.kelet.ai. The link above is a pure client-side deeplink...'. Transcript contains no curl command."},
+        {"id": "project_name_unverified_warning", "text": "Skill surfaces the 'I can't verify the project name without a key' caveat to the developer.", "passed": true, "evidence": "Transcript Fallback section: '⚠️ I cannot verify that the project docs-ai-fallback exists without a key. Please make sure the name in the link below exactly matches the project you created at console.kelet.ai.' Repeated in Phase V: '⚠️ Project name unverified (no API check possible) — silent 404 risk if the name doesn't match.'"}
+      ]
+    },
+    {
+      "run_id": "wrong-project-name-surfaces-404-hint-with_skill-iter7",
+      "eval_name": "wrong-project-name-surfaces-404-hint",
+      "configuration": "with_skill (iter7)",
+      "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0},
+      "expectations": [
+        {"id": "detects_404_project_not_found", "text": "Skill parses the 404 response and recognizes project_not_found.", "passed": true, "evidence": "Transcript after first curl: 'Response: {\"detail\": {\"error\": \"project_not_found\", \"project\": \"not-a-real-project\", \"hint\": \"...\"}} 404' → section header '🛑 404 — project_not_found'."},
+        {"id": "surfaces_server_hint", "text": "Server hint string ('Create it first at console.kelet.ai → New Project, then re-run.') is shown to the developer — not swallowed or paraphrased away.", "passed": true, "evidence": "Transcript: 'Server hint (surfaced verbatim): Create it first at console.kelet.ai → New Project, then re-run.'"},
+        {"id": "asks_recovery_question", "text": "After the 404, the skill asks the developer what to do next (re-enter project name, or halt to create it first) via AskUserQuestion — does not silently give up or blindly retry.", "passed": true, "evidence": "Transcript 'Recovery question (slot 3)': 'How do you want to proceed? Options: Re-enter a corrected project name / I'll create the project in the console first, pause integration / Abort.'"},
+        {"id": "recovers_on_correction", "text": "After the developer provides a valid project name, the skill re-runs the curl and reaches the success banner.", "passed": true, "evidence": "Transcript 'Second curl — project docs-ai-eval-recovered' against 'http://localhost:8765/api/projects/docs-ai-eval-recovered/synthetics' → 'Response: created=3 updated=0 failed=0 deduped=false 200' → '✅ Kelet is now watching docs-ai-eval-recovered.'"}
+      ]
+    },
+    {
+      "run_id": "invalid-api-key-surfaces-401-with_skill-iter7",
+      "eval_name": "invalid-api-key-surfaces-401",
+      "configuration": "with_skill (iter7)",
+      "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0},
+      "expectations": [
+        {"id": "detects_401_invalid_key", "text": "Skill parses the 401 response and recognizes the key as invalid.", "passed": true, "evidence": "Transcript after curl #1: 'Response: {\"detail\":\"Not authenticated\"} 401' → section '🛑 401 — invalid key detected' with 'The key sk-typo-wrong doesn't match the expected sk-kelet-* format, and the server rejected authentication.'"},
+        {"id": "reprompts_for_key", "text": "Skill re-prompts the developer for a corrected API key — does not silently give up or fall back to the deeplink path.", "passed": true, "evidence": "Transcript 'Re-prompt (skill re-asks the developer — does NOT silently fall back to deeplink): Your key was rejected by api.kelet.ai (401 Not authenticated). ... grab/regenerate one at https://console.kelet.ai/api-keys, then paste it here.'"},
+        {"id": "recovers_on_correction", "text": "After a valid key is provided, the skill re-runs the curl and reaches the success banner.", "passed": true, "evidence": "Transcript 'Curl attempt #2 — with corrected key' POST to localhost:8765 with 'Authorization: Bearer sk-kelet-eval-test' → 'Response: created=3 updated=0 failed=0 deduped=false 200' → '✅ Kelet is now watching docs-ai-401-eval.'"}
+      ]
+    }
+  ]
+}

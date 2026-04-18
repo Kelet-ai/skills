@@ -1,0 +1,68 @@
+{
+  "run_id": "fastapi-pydantic-ai-with-react-ui-with_skill-iter7-rerun",
+  "eval_name": "fastapi-pydantic-ai-with-react-ui",
+  "config": "with_skill",
+  "summary": {"passed": 9, "failed": 1, "total": 10, "pass_rate": 0.90},
+  "expectations": [
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() added at server startup",
+      "passed": true,
+      "evidence": "changes.diff line 19: '+kelet.configure()' added at module level in app/main.py (not per-request)."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps agent call with session_id",
+      "passed": true,
+      "evidence": "changes.diff line 576: '+        async with kelet.agentic_session(session_id=session.session_id):' wraps chat_agent.iter() in the POST /chat SSE path using the Redis-owned session.session_id. Regression fix confirmed."
+    },
+    {
+      "id": "kelet_provider_added",
+      "text": "KeletProvider added at React root with publishable key",
+      "passed": true,
+      "evidence": "changes.diff main.tsx line 290: '+    <KeletProvider apiKey={publishableKey} project={project}>' wrapping <App/> in ReactDOM.createRoot."
+    },
+    {
+      "id": "votefeedback_added",
+      "text": "VoteFeedback component added next to AI message output (not a floating widget or separate page)",
+      "passed": true,
+      "evidence": "App.tsx line 209: '+                <VoteFeedback.Root session_id={msg.sessionId}>' rendered inside the assistant message bubble in the .msg.assistant container — inline next to AI output."
+    },
+    {
+      "id": "session_id_propagated",
+      "text": "Session ID from X-Session-ID response header is captured in React state and passed to VoteFeedback sessionId prop",
+      "passed": true,
+      "evidence": "App.tsx line 138: 'const serverSessionId = res.headers.get(\\'X-Session-ID\\');' captured into sessionIdRef and attached to each assistant message (line 144), then passed as 'session_id={msg.sessionId}' on VoteFeedback.Root (line 209)."
+    },
+    {
+      "id": "both_keys_in_env",
+      "text": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY are present in .env at end of integration",
+      "passed": true,
+      "evidence": "transcript.md line 148: '`.env`: `KELET_API_KEY=sk-kelet-eval-test`, `KELET_PROJECT=docs-ai-react-eval`' and line 156: '`frontend/.env`: `VITE_KELET_PUBLISHABLE_KEY=pk-kelet-eval-test`, `VITE_KELET_PROJECT=docs-ai-react-eval`'. .env is .gitignored so not in diff; frontend/.env.example also in diff line 30."
+    },
+    {
+      "id": "on_brand_ui",
+      "text": "VoteFeedback is placed and configured to look natural in the chat UI",
+      "passed": true,
+      "evidence": "styles.css defines a dark-theme palette (--bg: #0b0c10, --accent: #6aa2ff) and .vote-btn / .feedback / .popover styles matching the app's chat aesthetic; VoteFeedback.UpvoteButton uses asChild with styled <button className=\"vote-btn\"> children inheriting theme vars."
+    },
+    {
+      "id": "implicit_fe_signals",
+      "text": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback",
+      "passed": false,
+      "evidence": "No useKeletSignal, copy-to-clipboard, retry, or abandon signal wiring anywhere in the diff. transcript.md line 166 explicitly states: 'No edit/retry/copy signals added (out of scope for plain chat).' Only VoteFeedback is wired — assertion requires at least one signal BEYOND VoteFeedback."
+    },
+    {
+      "id": "synthetics_creation_attempted",
+      "text": "Synthetic evaluator creation runs via Bash — curl POST to /api/projects/<project>/synthetics against localhost:8765",
+      "passed": true,
+      "evidence": "transcript.md lines 120-125: 'curl -sS --max-time 360 -X POST \"http://localhost:8765/api/projects/docs-ai-react-eval/synthetics\" -H \"Authorization: Bearer sk-kelet-eval-test\" ...' executed as a bash curl (not a copy-paste block for the developer); response shows 'created=3 updated=0 failed=0' and HTTP 200."
+    },
+    {
+      "id": "api_key_mode_question_asked",
+      "text": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion",
+      "passed": true,
+      "evidence": "questions_asked.md Q2 part 4 lists the three options: 'Paste secret key (`sk-kelet-...`)' / 'I\\'ll grab one' / 'I can\\'t paste secrets here'. Developer picked 'Paste secret key'."
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "eval_id": "session-id-boundary-check",
+  "eval_name": "session-id-boundary-check",
+  "prompt": "add kelet to my project",
+  "app_description": "FastAPI + pydantic-ai. User identity = phone number stored in DB. No per-conversation UUID — phone number is the only identifier. Multi-turn chat, users can start fresh conversations.",
+  "skill_version": "1.3.10",
+  "skill_path": "/Users/almogbaku/projects/kelet/skills/evals/workspace/baseline-master/SKILL.md",
+  "repo": "/Users/almogbaku/projects/kelet/docs-ai",
+  "repo_branch": "without-kelet",
+  "assertions": [
+    {
+      "id": "detects_phone_number_session_mismatch",
+      "description": "Identifies that phone number is a stable user identifier that outlives individual conversations and must NOT be used as session_id",
+      "type": "llm"
+    },
+    {
+      "id": "proposes_uuid_per_conversation",
+      "description": "Proposes generating a UUID per logical conversation (e.g. kelet_session_id), storing it in the DB/session store, and regenerating on fresh-conversation reset",
+      "type": "llm"
+    },
+    {
+      "id": "uses_phone_as_user_id",
+      "description": "Passes the phone number as user_id= in agentic_session(), not as session_id=",
+      "type": "llm"
+    },
+    {
+      "id": "surfaces_reset_boundary_issue",
+      "description": "Explicitly mentions that the fresh-conversation reset feature would be invisible to Kelet if phone number is used as session_id",
+      "type": "llm"
+    },
+    {
+      "id": "votefeedback_uses_kelet_session_id",
+      "description": "VoteFeedback session_id is wired to the kelet_session_id (per-conversation UUID), not the phone number",
+      "type": "llm"
+    },
+    {
+      "id": "configure_called_once",
+      "description": "kelet.configure() is added at startup (module level), not per-request",
+      "type": "llm"
+    },
+    {
+      "id": "no_phone_number_as_session_id_in_code",
+      "description": "The generated code does not pass phone number as session_id= anywhere",
+      "type": "llm"
+    }
+  ]
+}
