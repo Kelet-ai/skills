@@ -158,25 +158,23 @@ Single `AskUserQuestion` (`multiSelect: true`), structured as:
 3. **Keys + project name** (only what's missing):
    - `KELET_API_KEY` (`sk-kelet-...`) — get at console.kelet.ai/api-keys. **Required for synthetic auto-create.**
    - Publishable key (`pk-kelet-...`) — only if VoteFeedback is in the plan.
-   - Project name: **create it first** at console.kelet.ai → top-nav → New Project. Must exactly match — wrong name = silent routing failure. (Server now verifies this and returns 404 with a hint; the skill surfaces it.)
-4. **API key mode** (three-way, only if synthetic evaluators were selected):
-   - "Paste secret key (sk-kelet-...)" → primary auto-create flow.
-   - "I'll grab one" → halt Checkpoint 2 with: "Get a key at console.kelet.ai/api-keys (10 seconds), paste it here to continue."
-   - "I can't paste secrets here" → deeplink fallback (single base64 markdown link; no server call, no project verification).
+   - Project name: **create it first** at console.kelet.ai → top-nav → New Project. Wrong name = silent routing failure; server returns 404 with a hint, surface it.
+4. **API key mode** (only if synthetic evaluators were selected):
+   - "Paste secret key (sk-kelet-...)" → primary auto-create.
+   - "I'll grab one" → halt: "Get a key at console.kelet.ai/api-keys (10 seconds), paste it here to continue."
+   - "I can't paste secrets here" → deeplink fallback.
 
 ### Creating the evaluators
 
-**Primary path (key pasted):**
-
-Before the Bash call, print this banner verbatim:
+**Primary (key pasted):** before the curl, print verbatim:
 
 > ⏳ Creating your evaluators. This takes **1–3 minutes** (sometimes up to 5) — Kelet generates each config with an LLM and runs a dedup pass. Sit tight; don't cancel.
 
-Execute the curl with Bash (`timeout: 400000`). See [references/signals.md § Primary: API call](references/signals.md) for the exact command, response format, and status-code handling.
+Then run per [references/signals.md § Primary: API call](references/signals.md).
 
-On 200 success, render: `✅ Kelet is now watching {project}. First evaluator results in ~3min at https://console.kelet.ai/{project}/signals`
+On 200: `✅ Kelet is now watching {project}. First evaluator results in ~3min at https://console.kelet.ai/{project}/signals`
 
-**Fallback path (can't paste secrets):** build the base64 deeplink as a markdown link (see [references/signals.md](references/signals.md)). Project name is **not** verified in this path — add: "I can't verify the project name without a key — make sure it matches what you created in the console."
+**Fallback (can't paste):** build the base64 markdown link per [references/signals.md](references/signals.md).
 
 ### What you'll see
 

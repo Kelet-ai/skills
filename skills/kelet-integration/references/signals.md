@@ -110,9 +110,9 @@ Two paths. Primary (auto-create via API) whenever the user pastes `KELET_API_KEY
 
 ### Primary: API call
 
-The server creates, upserts, and dedups evaluators in one call. **Long-running — 1–3 minutes typical, up to 5.** Print the "sit tight" banner (see SKILL.md § Checkpoint 2) before running the curl.
+**Long-running — 1–3 minutes typical, up to 5.**
 
-**MUST EXECUTE this with the Bash tool** (set `timeout: 400000`) — never show as a code block for the user to copy:
+**MUST EXECUTE with Bash** (`timeout: 400000`) — never show as a code block for the user to copy:
 
 ```bash
 curl -sS --max-time 360 \
@@ -123,34 +123,28 @@ curl -sS --max-time 360 \
   -d '{"use_case":"<use_case>","ideas":[{"id":"<id>","name":"<name>","description":"<desc>","evaluator_type":"llm"}]}'
 ```
 
-⚠️ Do NOT add `-f` / `--fail` — that flag makes curl drop the response body on 4xx/5xx, which breaks `project_not_found` hint surfacing and 401 diagnosis.
+⚠️ Do NOT add `-f` / `--fail` — drops the response body on 4xx/5xx, breaking `project_not_found` hint surfacing and 401 diagnosis.
 
-The `-w '\n%{http_code}\n'` appends the HTTP status on its own final line after the response body. Split them when parsing: last line = status code, everything before = body.
+Parse output: last line = status code, everything before = body.
 
-Include only evaluators the developer selected. Idea fields mirror the server's `SignalIdea`:
-- `id` (required) — short slug (e.g. `task-completion`)
-- `name` (required) — display name
-- `description` (required) — what it measures
-- `evaluator_type` (required) — `"llm"` for semantic/qualitative, `"code"` for deterministic (`len()`, regex, JSON-parse)
-- `icon` (optional) — console icon key
-- `context` (optional) — steers the generator toward something specific to this use case
+Idea fields: `id`, `name`, `description`, `evaluator_type` (`"llm"` semantic, `"code"` deterministic). Optional: `icon`, `context` (steers the generator toward something specific).
 
-**Response parsing.** Body is plain text: `created=N updated=N failed=N deduped=bool`.
+**Response.** Body: `created=N updated=N failed=N deduped=bool`.
 - `failed > 0` → warn: "N ideas timed out — re-run the skill to retry those."
-- HTTP 200 → success; 401 → invalid key; 404 with `project_not_found` → surface the server's hint; 504 / connection timeout → "Generator was slow. Re-run to retry — partial state was persisted."; 5xx / network → fail loud.
+- 200 → success. 401 → invalid key. 404 `project_not_found` → surface the server's hint. 504 / timeout → "Generator was slow. Re-run to retry — partial state was persisted." 5xx / network → fail loud.
 
 ### Fallback: deeplink
 
-**Only use when the user declines to paste a secret key.** No project verification possible.
+**Only when the user declines to paste a secret key.** No project verification.
 
-Base64url-encode the payload, then build a markdown link so the terminal renders it as a clickable label:
+Build a markdown link so the terminal renders it as a clickable label:
 
 ```python
 python3 -c \
 "import base64,json; project='<project>'; payload={'use_case':'<use_case>','ideas':[{'name':'<name>','evaluator_type':'llm','description':'<desc>'}]}; url=f'https://console.kelet.ai/{project}/synthetics/setup?deeplink='+base64.urlsafe_b64encode(json.dumps(payload,separators=(',',':')).encode()).rstrip(b'=').decode(); print(f'[Open Kelet synthetic setup → {project}]({url})')"
 ```
 
-Present the markdown link as a bold action item. Add a note: "I can't verify the project name without a key — make sure it matches what you created in the console."
+Present as a bold action item. Note: "I can't verify the project name without a key — make sure it matches what you created."
 
 ---
 
