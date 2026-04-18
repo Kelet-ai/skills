@@ -119,12 +119,13 @@ curl -sS --max-time 360 \
   -X POST "https://api.kelet.ai/api/projects/<project>/synthetics" \
   -H "Authorization: Bearer $KELET_API_KEY" \
   -H 'Content-Type: application/json' \
-  -D /tmp/kelet_headers.txt \
   -w '\n%{http_code}\n' \
   -d '{"use_case":"<use_case>","ideas":[{"id":"<id>","name":"<name>","description":"<desc>","evaluator_type":"llm"}]}'
 ```
 
 ⚠️ Do NOT add `-f` / `--fail` — that flag makes curl drop the response body on 4xx/5xx, which breaks `project_not_found` hint surfacing and 401 diagnosis.
+
+The `-w '\n%{http_code}\n'` appends the HTTP status on its own final line after the response body. Split them when parsing: last line = status code, everything before = body.
 
 Include only evaluators the developer selected. Idea fields mirror the server's `SignalIdea`:
 - `id` (required) — short slug (e.g. `task-completion`)
@@ -136,7 +137,6 @@ Include only evaluators the developer selected. Idea fields mirror the server's 
 
 **Response parsing.** Body is plain text: `created=N updated=N failed=N deduped=bool`.
 - `failed > 0` → warn: "N ideas timed out — re-run the skill to retry those."
-- Check the `X-Kelet-API-Version` response header — if not `1`, warn the skill may be out of date and proceed.
 - HTTP 200 → success; 401 → invalid key; 404 with `project_not_found` → surface the server's hint; 504 / connection timeout → "Generator was slow. Re-run to retry — partial state was persisted."; 5xx / network → fail loud.
 
 ### Fallback: deeplink

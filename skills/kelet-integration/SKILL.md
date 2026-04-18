@@ -172,14 +172,9 @@ Before the Bash call, print this banner verbatim:
 
 > ⏳ Creating your evaluators. This takes **1–3 minutes** (sometimes up to 5) — Kelet generates each config with an LLM and runs a dedup pass. Sit tight; don't cancel.
 
-Then execute the curl with Bash (`timeout: 400000`) — see [references/signals.md](references/signals.md) for the exact command. Response is plain text: `created=N updated=N failed=N deduped=bool` + `X-Kelet-API-Version: 1` header.
+Execute the curl with Bash (`timeout: 400000`). See [references/signals.md § Primary: API call](references/signals.md) for the exact command, response format, and status-code handling.
 
-- **200:** render `✅ Kelet is now watching {project}. First evaluator results in ~3min at https://console.kelet.ai/{project}/signals`. If `failed > 0` → warn "N ideas timed out — re-run to retry."
-- **200 with `X-Kelet-API-Version != 1`:** warn skill may be out of date, continue.
-- **401:** key looks invalid — re-prompt.
-- **404 `project_not_found`:** surface server hint via `AskUserQuestion` — "Use a different project" (re-prompt) or "I'll create it first" (halt until confirmed).
-- **504 / timeout:** "Generator was slow. Re-run the skill to retry — partial state was persisted."
-- **5xx / network:** fail loud; show the error; stop. No silent fallback.
+On 200 success, render: `✅ Kelet is now watching {project}. First evaluator results in ~3min at https://console.kelet.ai/{project}/signals`
 
 **Fallback path (can't paste secrets):** build the base64 deeplink as a markdown link (see [references/signals.md](references/signals.md)). Project name is **not** verified in this path — add: "I can't verify the project name without a key — make sure it matches what you created in the console."
 
