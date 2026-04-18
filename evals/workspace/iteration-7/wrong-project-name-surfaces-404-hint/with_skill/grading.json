@@ -1,0 +1,32 @@
+{
+  "run_id": "wrong-project-name-surfaces-404-hint-with_skill-iter7",
+  "eval_name": "wrong-project-name-surfaces-404-hint",
+  "config": "with_skill",
+  "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "detects_404_project_not_found",
+      "text": "Skill parses the 404 response and recognizes project_not_found.",
+      "passed": true,
+      "evidence": "Transcript after first curl: 'Response: {\"detail\": {\"error\": \"project_not_found\", \"project\": \"not-a-real-project\", \"hint\": \"...\"}} 404' → section header '🛑 404 — project_not_found' — skill explicitly recognized the error code and body."
+    },
+    {
+      "id": "surfaces_server_hint",
+      "text": "Server hint string ('Create it first at console.kelet.ai → New Project, then re-run.') is shown to the developer — not swallowed or paraphrased away.",
+      "passed": true,
+      "evidence": "Transcript: 'Server hint (surfaced verbatim): Create it first at console.kelet.ai → New Project, then re-run.' — hint reproduced literally in the transcript."
+    },
+    {
+      "id": "asks_recovery_question",
+      "text": "After the 404, the skill asks the developer what to do next (re-enter project name, or halt to create it first) via AskUserQuestion — does not silently give up or blindly retry.",
+      "passed": true,
+      "evidence": "Transcript 'Recovery question (slot 3)': 'How do you want to proceed? Options: Re-enter a corrected project name (skill will re-run the curl) / I'll create the project in the console first, pause integration / Abort.' Explicit AskUserQuestion with three recovery options."
+    },
+    {
+      "id": "recovers_on_correction",
+      "text": "After the developer provides a valid project name, the skill re-runs the curl and reaches the success banner.",
+      "passed": true,
+      "evidence": "Transcript 'Second curl — project docs-ai-eval-recovered' ran the POST against 'http://localhost:8765/api/projects/docs-ai-eval-recovered/synthetics' → 'Response: created=3 updated=0 failed=0 deduped=false 200' → '✅ Kelet is now watching docs-ai-eval-recovered.' Success banner rendered."
+    }
+  ]
+}

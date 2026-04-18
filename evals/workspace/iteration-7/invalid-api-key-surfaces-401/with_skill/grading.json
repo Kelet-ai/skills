@@ -1,0 +1,26 @@
+{
+  "run_id": "invalid-api-key-surfaces-401-with_skill-iter7",
+  "eval_name": "invalid-api-key-surfaces-401",
+  "config": "with_skill",
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "detects_401_invalid_key",
+      "text": "Skill parses the 401 response and recognizes the key as invalid.",
+      "passed": true,
+      "evidence": "Transcript after curl #1: 'Response: {\"detail\":\"Not authenticated\"} 401' → section '🛑 401 — invalid key detected' with 'The key sk-typo-wrong doesn't match the expected sk-kelet-* format, and the server rejected authentication.' Skill parsed the 401 and diagnosed it as invalid key."
+    },
+    {
+      "id": "reprompts_for_key",
+      "text": "Skill re-prompts the developer for a corrected API key — does not silently give up or fall back to the deeplink path.",
+      "passed": true,
+      "evidence": "Transcript 'Re-prompt (skill re-asks the developer — does NOT silently fall back to deeplink): Your key was rejected by api.kelet.ai (401 Not authenticated). Likely cause: the key I received (sk-typo-wrong) isn't a valid Kelet secret key. Valid keys look like sk-kelet-... — grab/regenerate one at https://console.kelet.ai/api-keys, then paste it here.' Explicit re-prompt to developer."
+    },
+    {
+      "id": "recovers_on_correction",
+      "text": "After a valid key is provided, the skill re-runs the curl and reaches the success banner.",
+      "passed": true,
+      "evidence": "Transcript 'Curl attempt #2 — with corrected key' shows POST to localhost:8765 with 'Authorization: Bearer sk-kelet-eval-test' → 'Response: created=3 updated=0 failed=0 deduped=false 200' → '✅ Kelet is now watching docs-ai-401-eval.' Success banner rendered."
+    }
+  ]
+}

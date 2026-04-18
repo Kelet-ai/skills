@@ -15,21 +15,14 @@
 
 ## Python
 
-`kelet.configure()` at startup auto-instruments pydantic-ai/Anthropic/OpenAI/LangChain — spans capture, but the
-session ID is only inferred when the framework owns it.
+`kelet.configure()` at startup auto-instruments pydantic-ai/Anthropic/OpenAI/LangChain — no extras needed.
 All params default to env vars; `kelet.configure()` with no args works when `KELET_API_KEY` is set.
-`agentic_session(session_id=...)` is **required whenever the app owns the session ID** (Redis/DB/server-issued UUID)
-or you own the orchestration loop — auto-instrumentation alone can't link your ID to spans. Wrap at the route/handler
-that bounds the conversation. See Sessions section in SKILL.md.
+`agentic_session()` is **required whenever you own the orchestration loop**. If a supported framework orchestrates for
+you, sessions are inferred automatically — no wrapper needed. See Sessions section in SKILL.md.
 
 `kelet.agent(name=...)` — use when: (a) multiple agents run in one session and need separate attribution, or (b) your
 framework doesn't expose agent names natively (pydantic-ai does; OpenAI/Anthropic/raw SDKs don't — Kelet can't infer
 it). Logfire users: `kelet.configure()` detects the existing `TracerProvider` — no conflict.
-
-**Bare LiteLLM:** traces are auto-captured, but LiteLLM does not natively propagate session/agent context into its
-spans. If LiteLLM is called directly (not through another instrumented framework like Google ADK), wrap calls in
-`agentic_session()` (and optionally `kelet.agent()`) to group them. When LiteLLM runs under another framework that
-sets context, no extra wrapping is needed.
 
 **Streaming:** wrap the **entire** generator body (not the caller), including the final sentinel — trailing spans are
 silently lost otherwise:

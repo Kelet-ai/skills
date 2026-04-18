@@ -1,0 +1,68 @@
+{
+  "run_id": "fastapi-pydantic-ai-with-react-ui-with_skill-iter7",
+  "eval_name": "fastapi-pydantic-ai-with-react-ui",
+  "config": "with_skill",
+  "summary": {"passed": 9, "failed": 1, "total": 10, "pass_rate": 0.9},
+  "expectations": [
+    {
+      "id": "configure_called",
+      "text": "kelet.configure() added at server startup",
+      "passed": true,
+      "evidence": "changes.diff app/main.py line 36: 'kelet.configure(api_key=settings.kelet_api_key, project=settings.kelet_project)' added at module scope (not inside lifespan or per-request handler)."
+    },
+    {
+      "id": "agentic_session_wired",
+      "text": "agentic_session() wraps agent call with session_id",
+      "passed": false,
+      "evidence": "changes.diff contains NO agentic_session() call. src/routers/chat.py is untouched. Transcript Checkpoint 2: 'pydantic-ai is auto-instrumented, so no agentic_session() wrapper is required'. Skill intentionally skipped wiring the app-owned session_id, so traces will not be linked to the VoteFeedback session_id that the React app sends — a correctness gap against the eval's expected output."
+    },
+    {
+      "id": "kelet_provider_added",
+      "text": "KeletProvider added at React root with publishable key",
+      "passed": true,
+      "evidence": "changes.diff frontend/src/main.tsx: '<KeletProvider apiKey={publishableKey} project={project}><App /></KeletProvider>' where 'const publishableKey = import.meta.env.VITE_KELET_PUBLISHABLE_KEY'."
+    },
+    {
+      "id": "votefeedback_added",
+      "text": "VoteFeedback component added next to AI message output (not a floating widget or separate page)",
+      "passed": true,
+      "evidence": "changes.diff frontend/src/App.tsx places <VoteFeedback.Root session_id={sessionIdRef.current}> with UpvoteButton/DownvoteButton directly inside the 'msg ai' div, below each AI message's text — inline with the message bubble, not a floating overlay."
+    },
+    {
+      "id": "session_id_propagated",
+      "text": "Session ID from X-Session-ID response header is captured in React state and passed to VoteFeedback sessionId prop",
+      "passed": true,
+      "evidence": "changes.diff App.tsx: 'const sid = res.headers.get(\"X-Session-ID\"); if (sid) sessionIdRef.current = sid;' and '<VoteFeedback.Root session_id={sessionIdRef.current}>'. Captured into useRef and passed as session_id prop."
+    },
+    {
+      "id": "both_keys_in_env",
+      "text": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY are present in .env at end of integration (either pre-existing or newly added). Neither hardcoded in source.",
+      "passed": true,
+      "evidence": "Transcript Implementation: '.env — set KELET_API_KEY=sk-kelet-eval-test' (server) and 'frontend/.env — VITE_KELET_PUBLISHABLE_KEY=pk-kelet-eval-test, VITE_KELET_PROJECT=docs-ai-react-eval'. Both .env files are gitignored; changes.diff adds frontend/.env.example with 'VITE_KELET_PUBLISHABLE_KEY=pk-kelet-...' placeholder. No keys hardcoded in source (main.tsx reads from import.meta.env; main.py reads from settings)."
+    },
+    {
+      "id": "on_brand_ui",
+      "text": "VoteFeedback is placed and configured to look natural in the chat UI — not a jarring out-of-place widget. Skill checks existing styles/theme and passes appropriate props or classnames.",
+      "passed": true,
+      "evidence": "changes.diff frontend/src/styles.css defines dark-palette tokens (--bg, --panel, --panel-2, --border, --accent) and specifically styles '.msg.ai .feedback button' with 'background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); padding: 4px 8px; border-radius: 8px;' — matching the chat bubble palette. Transcript: 'No emoji-default styling; feedback buttons reuse the app's --panel-2 / --border / --accent tokens.'"
+    },
+    {
+      "id": "implicit_fe_signals",
+      "text": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback — e.g. useKeletSignal for copy-to-clipboard on AI output, message retry, or session abandon. Does not just stop at VoteFeedback.",
+      "passed": false,
+      "evidence": "Signal Analysis Pass states: 'Coded signals (frontend): propose VoteFeedback (👍/👎) since we're adding the UI anyway. No edits (plain chat, no AI-generated form values) and no retry button yet — skip both for lightweight.' changes.diff App.tsx contains no useKeletSignal usage, no copy button, no retry, no abandon handler. Only VoteFeedback is wired."
+    },
+    {
+      "id": "synthetics_creation_attempted",
+      "text": "Synthetic evaluator creation runs via Bash — curl POST to /api/projects/<project>/synthetics against localhost:8765 (per eval environment override). Transcript must show the localhost URL, not api.kelet.ai. Not shown as a copy-paste code block for the developer.",
+      "passed": true,
+      "evidence": "Transcript 'Creating the evaluators': 'curl -sS --max-time 360 -X POST \"http://localhost:8765/api/projects/docs-ai-react-eval/synthetics\" ...' with 'Response: created=3 updated=0 failed=0 deduped=false 200'. Localhost URL used, not api.kelet.ai."
+    },
+    {
+      "id": "api_key_mode_question_asked",
+      "text": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets) when synthetic evaluators were selected.",
+      "passed": true,
+      "evidence": "questions_asked.md Checkpoint 2 includes 'Key mode: Paste secret key → primary API auto-create' as the selected option among the three-option key-mode question; transcript Checkpoint 2 lists 'Key mode: Paste secret key.' as the simulated pick."
+    }
+  ]
+}

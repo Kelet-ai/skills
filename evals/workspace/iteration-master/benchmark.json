@@ -1,0 +1,467 @@
+{
+  "skill_name": "kelet-integration",
+  "metadata": {
+    "iteration": "master-vs-v1.4"
+  },
+  "run_summary": [
+    {
+      "configuration": "with_skill (master)",
+      "mean_pass_rate": 0.928,
+      "n_evals": 5
+    },
+    {
+      "configuration": "with_skill (v1.4 (iter6))",
+      "mean_pass_rate": 1.0,
+      "n_evals": 1
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "fastapi-pydantic-ai-lightweight-master",
+      "eval_name": "fastapi-pydantic-ai-lightweight",
+      "configuration": "with_skill (master)",
+      "run_number": 1,
+      "summary": {
+        "passed": 8,
+        "failed": 0,
+        "total": 8,
+        "pass_rate": 1.0
+      },
+      "expectations": [
+        {
+          "id": "installs_kelet",
+          "text": "kelet is present in pyproject.toml or requirements at end of integration (pre-existing or newly added)",
+          "passed": true,
+          "evidence": "Phase 0a detected `kelet>=1.3.0` already in pyproject.toml and explicitly noted no install step was needed."
+        },
+        {
+          "id": "configure_called",
+          "text": "kelet.configure() is called at startup (not per-request)",
+          "passed": true,
+          "evidence": "diff shows `kelet.configure()` added at module level in app/main.py, outside any request handler or lifespan function."
+        },
+        {
+          "id": "agentic_session_wired",
+          "text": "agentic_session() wraps the agent call with the existing Redis session_id",
+          "passed": true,
+          "evidence": "diff shows `async with kelet.agentic_session(session_id=session.session_id):` wrapping the entire `chat_agent.iter()` block in _run_agent_stream, using the Redis UUID4 session_id."
+        },
+        {
+          "id": "no_voteback_no_react",
+          "text": "Does not add VoteFeedback or React (app has no React frontend)",
+          "passed": true,
+          "evidence": "Transcript explicitly notes 'No React frontend \u2014 no KeletProvider, no VoteFeedback, no @kelet-ai/feedback-ui' and diff contains no React changes."
+        },
+        {
+          "id": "keys_in_env",
+          "text": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)",
+          "passed": true,
+          "evidence": "diff shows KELET_API_KEY and KELET_PROJECT added to .env file; transcript confirms the Settings fields that previously shadowed env resolution were also removed."
+        },
+        {
+          "id": "question_budget",
+          "text": "AskUserQuestion called at most 3 times total",
+          "passed": true,
+          "evidence": "Transcript shows exactly 3 AskUserQuestion calls: Q1 (confirm diagram), Q2 (signals/synthetics multiSelect), Q3 (confirm deeplink activated)."
+        },
+        {
+          "id": "lightweight_mode",
+          "text": "Integration is lightweight \u2014 does not add unnecessary signals or complexity",
+          "passed": true,
+          "evidence": "Skill added zero coded signals and no feedback UI, relying on synthetics only \u2014 consistent with the plain HTML, no-React-frontend context."
+        },
+        {
+          "id": "deeplink_generated",
+          "text": "Synthetic evaluator deeplink generated via Bash (not shown as code block)",
+          "passed": true,
+          "evidence": "Phase 0c shows the deeplink as a rendered URL (not a code block) with the label 'Deeplink generated (Bash execution)', containing a valid base64url-encoded payload."
+        }
+      ],
+      "timing": {
+        "eval_name": "fastapi-pydantic-ai-lightweight",
+        "skill_version": "1.3.10",
+        "run_at": "2026-04-17T20:14:11Z",
+        "phase_timings_seconds": {
+          "0a_project_mapping": 42,
+          "0b_workflow_mapping": 18,
+          "0c_signal_brainstorming": 22,
+          "0d_preview": 8,
+          "1_api_key_setup": 15,
+          "implementation": 35,
+          "phase_v_verification": 20
+        },
+        "total_duration_seconds": 160,
+        "questions_asked": 3,
+        "tool_calls": {
+          "Read": 9,
+          "Bash": 2,
+          "AskUserQuestion": 3,
+          "Write": 4,
+          "Edit": 2
+        }
+      }
+    },
+    {
+      "run_id": "session-id-boundary-check-master",
+      "eval_name": "session-id-boundary-check",
+      "configuration": "with_skill (master)",
+      "run_number": 1,
+      "summary": {
+        "passed": 3,
+        "failed": 1,
+        "total": 4,
+        "pass_rate": 0.75
+      },
+      "expectations": [
+        {
+          "id": "detects_session_mismatch",
+          "text": "Surfaces the issue that phone number outlives sessions and cannot be used as session_id",
+          "passed": true,
+          "evidence": "Phase 0a explicitly flags the mismatch: phone number is stable across all conversations and using it as session_id would make fresh-start resets invisible to Kelet, with all conversations appearing as one unending session."
+        },
+        {
+          "id": "proposes_uuid_fix",
+          "text": "Proposes generating a UUID per conversation (not using phone as session_id)",
+          "passed": true,
+          "evidence": "Skill proposed adding `kelet_session_id: str` (UUID) to ChatSession, a `reset_session()` function that regenerates the UUID on fresh start, and diff confirms this was implemented in src/cache/__init__.py."
+        },
+        {
+          "id": "uses_user_id_param",
+          "text": "Phone is PII \u2014 skill correctly omits user_id= without asking the developer about it. NOTE: the master skill wires phone as user_id= \u2014 this counts as a FAIL since the new policy is to omit PII identifiers.",
+          "passed": false,
+          "evidence": "Master skill wired phone_number directly as `user_id=body.phone_number` in agentic_session(), explicitly surfaced in the diff and verification checklist \u2014 PII is passed as user_id rather than omitted."
+        },
+        {
+          "id": "configure_called",
+          "text": "kelet.configure() is still added at startup",
+          "passed": true,
+          "evidence": "diff shows `import kelet` and `kelet.configure()` added at module level in app/main.py, before the lifespan/app creation."
+        }
+      ],
+      "timing": {
+        "total_tokens": 87420,
+        "duration_ms": 498300,
+        "total_duration_seconds": 498.3
+      }
+    },
+    {
+      "run_id": "already-has-kelet-partial-integration-master",
+      "eval_name": "already-has-kelet-partial-integration",
+      "configuration": "with_skill (master)",
+      "run_number": 1,
+      "summary": {
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "pass_rate": 1.0
+      },
+      "expectations": [
+        {
+          "id": "diagnoses_missing_session",
+          "text": "Correctly identifies missing agentic_session() as the cause of unlinked traces",
+          "passed": true,
+          "evidence": "Phase 0a explicitly states 'agentic_session() is missing from both endpoints \u2014 pydantic-ai spans are each appearing as separate unlinked traces' and names it the root cause."
+        },
+        {
+          "id": "adds_agentic_session",
+          "text": "Adds agentic_session() wrapping the agent call",
+          "passed": true,
+          "evidence": "diff shows kelet.agentic_session(session_id=session.session_id) added wrapping the full _run_agent_stream body, and a UUID-based agentic_session added for GET /chat stateless path."
+        },
+        {
+          "id": "no_redundant_setup",
+          "text": "Does not re-ask for API keys or project name already configured. Fixing a broken/wrong method is acceptable and does NOT count as redundant.",
+          "passed": true,
+          "evidence": "Phase 1 confirms keys are already set in .env and moves on without re-prompting; the skill adds kelet.configure() which was genuinely missing (not re-asking for keys already present)."
+        },
+        {
+          "id": "phase_v_verification",
+          "text": "Includes verification step: trigger LLM call and check console for sessions",
+          "passed": true,
+          "evidence": "Phase V includes an explicit smoke test: 'Trigger a chat message \u2192 open https://console.kelet.ai \u2192 navigate to Sessions. You should see a session with the UUID from the X-Session-ID response header.'"
+        }
+      ],
+      "timing": {
+        "eval_start_utc": "2026-04-17T20:11:04Z",
+        "eval_end_utc": "2026-04-17T20:12:52Z",
+        "total_seconds": 108,
+        "phase_breakdown": {
+          "file_exploration": 18,
+          "phase_0a_mapping": 22,
+          "phase_0b_workflow": 12,
+          "phase_0c_signals": 14,
+          "phase_0d_preview": 5,
+          "phase_1_keys": 8,
+          "implementation": 20,
+          "phase_v_verification": 9
+        },
+        "turns": 11,
+        "simulated": true
+      }
+    },
+    {
+      "run_id": "fastapi-pydantic-ai-with-react-ui-master",
+      "eval_name": "fastapi-pydantic-ai-with-react-ui",
+      "configuration": "with_skill (master)",
+      "run_number": 1,
+      "summary": {
+        "passed": 8,
+        "failed": 1,
+        "total": 9,
+        "pass_rate": 0.89
+      },
+      "expectations": [
+        {
+          "id": "configure_called",
+          "text": "kelet.configure() added at server startup",
+          "passed": true,
+          "evidence": "diff shows import kelet and kelet.configure() added to app/main.py at module level after imports, before the lifespan context manager."
+        },
+        {
+          "id": "agentic_session_wired",
+          "text": "agentic_session() wraps agent call with session_id",
+          "passed": true,
+          "evidence": "diff shows kelet.agentic_session(session_id=session.session_id) wrapping the full _run_agent_stream body, and a stateless_session_id UUID session for GET /chat."
+        },
+        {
+          "id": "kelet_provider_added",
+          "text": "KeletProvider added at React root with publishable key",
+          "passed": true,
+          "evidence": "diff shows KeletProvider added in frontend/src/main.tsx wrapping App with apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY} and project={import.meta.env.VITE_KELET_PROJECT}."
+        },
+        {
+          "id": "votefeedback_added",
+          "text": "VoteFeedback component added next to AI message output (not a floating widget or separate page)",
+          "passed": true,
+          "evidence": "VoteFeedback.Root is rendered inside AssistantMessage immediately after the message content span, inline per-message \u2014 not a floating widget or separate page."
+        },
+        {
+          "id": "session_id_propagated",
+          "text": "Session ID from X-Session-ID response header is captured in React state and passed to VoteFeedback sessionId prop",
+          "passed": true,
+          "evidence": "frontend_changes.md documents res.headers.get('X-Session-ID') \u2192 setSessionId \u2192 sessionId prop on AssistantMessage \u2192 VoteFeedback.Root session_id={sessionId}."
+        },
+        {
+          "id": "both_keys_in_env",
+          "text": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY are present in .env files at end of integration \u2014 secret key in server .env, publishable key in frontend/.env (either pre-existing or newly added). Neither hardcoded in source.",
+          "passed": false,
+          "evidence": "diff adds both keys to a single root .env with placeholder values (kelet_sk_... / kelet_pk_...) rather than writing the actual developer-provided keys; also writes to one .env file rather than separate server .env and frontend/.env as the assertion requires."
+        },
+        {
+          "id": "on_brand_ui",
+          "text": "VoteFeedback is placed and configured to look natural in the chat UI \u2014 not a jarring out-of-place widget. Skill checks existing styles/theme and passes appropriate props or classnames.",
+          "passed": true,
+          "evidence": "Skill reads existing CSS Modules and uses styles.iconBtn on vote buttons (asChild), styles.sendBtn on submit, and dark-palette inline styles (#1e2130/#2d3748) matching the existing chat theme."
+        },
+        {
+          "id": "implicit_fe_signals",
+          "text": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback \u2014 e.g. useKeletSignal for copy-to-clipboard, retry, or abandon.",
+          "passed": true,
+          "evidence": "Two implicit signals added: user-copy (copy-to-clipboard via useKeletSignal) and user-abandon (beforeunload event with score 0.0)."
+        },
+        {
+          "id": "deeplink_generated",
+          "text": "Synthetic evaluator deeplink generated via Bash (not shown as code block)",
+          "passed": true,
+          "evidence": "Phase 0c shows the deeplink URL rendered as a clickable action link (not a code block), with base64url-encoded payload covering Task Completion, Sentiment Analysis, and RAG Faithfulness."
+        }
+      ],
+      "timing": {
+        "total_tokens": 127340,
+        "duration_ms": 584200,
+        "total_duration_seconds": 584.2
+      }
+    },
+    {
+      "run_id": "fastapi-pydantic-ai-with-react-ui-v1.4 (iter6)",
+      "eval_name": "fastapi-pydantic-ai-with-react-ui",
+      "configuration": "with_skill (v1.4 (iter6))",
+      "run_number": 2,
+      "summary": {
+        "passed": 9,
+        "failed": 0,
+        "total": 9,
+        "pass_rate": 1.0
+      },
+      "expectations": [
+        {
+          "id": "configure_called",
+          "text": "kelet.configure() added at server startup",
+          "passed": true,
+          "evidence": "kelet.configure() added at module level in app/main.py (line 37 of diff), outside the lifespan context manager, reading KELET_API_KEY and KELET_PROJECT from env."
+        },
+        {
+          "id": "agentic_session_wired",
+          "text": "agentic_session() wraps agent call with session_id",
+          "passed": true,
+          "evidence": "async with kelet.agentic_session(session_id=session.session_id) wraps chat_agent.iter() in _run_agent_stream() in src/routers/chat.py."
+        },
+        {
+          "id": "kelet_provider_added",
+          "text": "KeletProvider added at React root with publishable key",
+          "passed": true,
+          "evidence": "KeletProvider wraps App in frontend/src/main.tsx with apiKey={import.meta.env.VITE_KELET_PUBLISHABLE_KEY} and project={import.meta.env.VITE_KELET_PROJECT}."
+        },
+        {
+          "id": "votefeedback_added",
+          "text": "VoteFeedback component added next to AI message output (not a floating widget or separate page)",
+          "passed": true,
+          "evidence": "VoteFeedback.Root is placed inside AssistantMessage component directly beneath the message content, inline with the chat message \u2014 not a floating overlay or separate page."
+        },
+        {
+          "id": "session_id_propagated",
+          "text": "Session ID from X-Session-ID response header is captured in React state and passed to VoteFeedback sessionId prop",
+          "passed": true,
+          "evidence": "res.headers.get('X-Session-ID') calls setSessionId(sid) in React state, and sessionId is passed as session_id={sessionId} to VoteFeedback.Root."
+        },
+        {
+          "id": "both_keys_in_env",
+          "text": "Both KELET_API_KEY and VITE_KELET_PUBLISHABLE_KEY are present in .env files at end of integration \u2014 secret key in server .env, publishable key in frontend/.env (either pre-existing or newly added). Neither hardcoded in source.",
+          "passed": true,
+          "evidence": "KELET_API_KEY added to root .env, VITE_KELET_PUBLISHABLE_KEY added to new frontend/.env; both use placeholder values (sk-kelet-... / pk-kelet-...), not hardcoded in source files."
+        },
+        {
+          "id": "on_brand_ui",
+          "text": "VoteFeedback is placed and configured to look natural in the chat UI \u2014 not a jarring out-of-place widget. Skill checks existing styles/theme and passes appropriate props or classnames.",
+          "passed": true,
+          "evidence": "Skill reads App.module.css and applies existing classes (iconBtn, sendBtn, assistantMessage) to VoteFeedback buttons; popover inline styles match the app's dark palette (#1e2130 background, #2d3748 borders, #e2e8f0 text)."
+        },
+        {
+          "id": "implicit_fe_signals",
+          "text": "Skill identifies at least one additional implicit frontend signal beyond VoteFeedback \u2014 e.g. useKeletSignal for copy-to-clipboard, retry, or abandon.",
+          "passed": true,
+          "evidence": "useKeletSignal is used for two additional signals: user-copy on copy button click and user-abandon on beforeunload event, both wired in frontend/src/App.tsx."
+        },
+        {
+          "id": "deeplink_generated",
+          "text": "Synthetic evaluator deeplink generated via Bash (not shown as code block)",
+          "passed": true,
+          "evidence": "Deeplink URL (https://console.kelet.ai/docs-ai-assistant/synthetics/setup?deeplink=...) presented inline in the transcript under 'Deeplink generated (Bash execution)' \u2014 not inside a code block."
+        }
+      ],
+      "timing": {
+        "start_ms": 1776453902135,
+        "end_ms": 1776454074850,
+        "elapsed_ms": 172715,
+        "elapsed_s": 172.7
+      }
+    },
+    {
+      "run_id": "expand-to-full-mode-master",
+      "eval_name": "expand-to-full-mode",
+      "configuration": "with_skill (master)",
+      "run_number": 1,
+      "summary": {
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "pass_rate": 1.0
+      },
+      "expectations": [
+        {
+          "id": "no_repeat_basic_setup",
+          "text": "Does not re-add configure() or agentic_session() that are already correctly wired \u2014 skips already-done work. Fixing/improving existing wiring is acceptable.",
+          "passed": true,
+          "evidence": "Phase 0a confirms both kelet.configure() and agentic_session() are already wired; the diff only adds kelet.agent() and the agent-topic-refusal signal \u2014 no re-addition of configure() or agentic_session()."
+        },
+        {
+          "id": "proposes_additional_signals",
+          "text": "Proposes at least one additional coded signal beyond what's already in place",
+          "passed": true,
+          "evidence": "agent-topic-refusal coded signal proposed and implemented, firing when the agent output contains the refusal pattern to cover the F4/F5 false-refusal failure mode."
+        },
+        {
+          "id": "expands_synthetics",
+          "text": "Proposes more synthetic evaluators than the default Task Completion alone",
+          "passed": true,
+          "evidence": "Five synthetic evaluators proposed: RAG Faithfulness, Answer Relevancy, Role Adherence, Tool Usage Efficiency, and Session Health Stats \u2014 well beyond a single Task Completion evaluator."
+        },
+        {
+          "id": "no_votefeedback_no_react",
+          "text": "Does not propose adding a new React frontend or installing React from scratch \u2014 app has no React frontend. Extending an existing React setup if found in the repo is acceptable.",
+          "passed": true,
+          "evidence": "Phase 0c explicitly states 'No React frontend, no feedback UI. VoteFeedback doesn't apply. No explicit signals to add.' and Phase V confirms 'No React frontend \u2014 no VoteFeedback checks needed.'"
+        },
+        {
+          "id": "explains_value",
+          "text": "Explains what each new signal or evaluator catches \u2014 not just lists them",
+          "passed": true,
+          "evidence": "Each proposal includes explicit failure-mode coverage (e.g., agent-topic-refusal 'catches F4+F5 \u2014 both hallucination-prevention refusals and false refusals'; each synthetic evaluator is mapped to a named failure category with description of what it detects)."
+        }
+      ],
+      "timing": {
+        "eval_date": "2026-04-17",
+        "phase_sequence": [
+          "0a",
+          "0b",
+          "0c",
+          "0d",
+          "1",
+          "V"
+        ],
+        "phases": {
+          "welcome": {
+            "duration_seconds": 18,
+            "notes": "Welcome banner + detective model explanation"
+          },
+          "0a": {
+            "duration_seconds": 52,
+            "notes": "Read pyproject.toml, main.py, settings, chat.py, agent/__init__.py, cache, k8s charts, helmfile, environment yamls. Architecture diagram + project map produced."
+          },
+          "0b": {
+            "duration_seconds": 31,
+            "notes": "Workflow mapping from existing code. 10 failure modes identified. Gap analysis against existing signals."
+          },
+          "0c": {
+            "duration_seconds": 47,
+            "notes": "Signal brainstorming, 2 additions proposed (kelet.agent + topic-refusal), 5 synthetics selected. Deeplink generated via Bash tool."
+          },
+          "0d": {
+            "duration_seconds": 14,
+            "notes": "Console preview table presented."
+          },
+          "1": {
+            "duration_seconds": 8,
+            "notes": "API keys already set via K8s Secret + ConfigMap. No changes needed."
+          },
+          "implementation": {
+            "duration_seconds": 35,
+            "notes": "Plan presented, approved, 1 file edited (src/routers/chat.py). Added kelet.agent() wrapper and agent-topic-refusal signal."
+          },
+          "V": {
+            "duration_seconds": 22,
+            "notes": "Verification checklist reviewed. All static checks passed. Smoke test steps provided to developer."
+          }
+        },
+        "total_duration_seconds": 227,
+        "total_duration_human": "~3m 47s",
+        "files_read": [
+          "pyproject.toml",
+          "app/main.py",
+          "src/settings/__init__.py",
+          "src/routers/chat.py",
+          "src/agent/__init__.py",
+          "src/cache/__init__.py",
+          "src/agent/prompts/chat_system.j2",
+          "k8s/helmfile.yaml.gotmpl",
+          "k8s/environments/prod.yaml",
+          "k8s/environments/stag.yaml",
+          "k8s/charts/docs-ai/values.yaml",
+          "k8s/charts/docs-ai/templates/deployment.yaml",
+          "k8s/charts/docs-ai/templates/configmap.yaml",
+          ".github/workflows/build.yml"
+        ],
+        "files_changed": [
+          "src/routers/chat.py"
+        ],
+        "tool_calls": {
+          "Read": 14,
+          "Edit": 1,
+          "Bash": 3,
+          "WebFetch": 0,
+          "AskUserQuestion": 4
+        }
+      }
+    }
+  ]
+}

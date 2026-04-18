@@ -1,0 +1,61 @@
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index e5b297b..9f4a2c1 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -51,16 +51,17 @@ async def _run_agent_stream(
+     messages_json: str | None = None
+     try:
+         async with kelet.agentic_session(session_id=session.session_id):
+             # Emit retry signal when the user sends another message on an existing session
+             if is_retry:
+                 await kelet.signal(
+                     "EVENT",
+                     "HUMAN",
+                     trigger_name="user-retry",
+                     score=0.0,
+                 )
+
+-            async with chat_agent.iter(
+-                message, deps=deps, message_history=message_history
+-            ) as run:
++            async with kelet.agent(name="docs-assistant"):
++              async with chat_agent.iter(
++                  message, deps=deps, message_history=message_history
++              ) as run:
+                 async for node in run:
+                     if Agent.is_model_request_node(node):
+                         node_emitted = False
+@@ -78,6 +79,16 @@ async def _run_agent_stream(
+                 if run.result is not None:
+                     messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
+         await kelet.signal(
+             "EVENT",
+             "LABEL",
+             session_id=session.session_id,
+             trigger_name="agent-stream-error",
+             score=0.0,
+         )
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+         return
+
+     if messages_json is not None:
++        # Detect topic-refusal: agent said the docs don't cover the question.
++        # This fires for both correct refusals (out-of-scope query) and false refusals
++        # (docs DO cover it but retrieval missed). Kelet distinguishes them by clustering
++        # refusal sessions against retry patterns — refusal + retry = false refusal.
++        if run.result is not None:
++            output = run.result.output or ""
++            if "does not cover" in output.lower():
++                await kelet.signal(
++                    "EVENT",
++                    "LABEL",
++                    trigger_name="agent-topic-refusal",
++                    score=0.0,
++                    metadata={"output_preview": output[:200]},
++                )
++
+         try:
+             session.history = messages_json
+             await save_session(redis, session, settings.session_ttl_seconds)

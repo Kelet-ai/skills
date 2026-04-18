@@ -1,0 +1,32 @@
+{
+  "run_id": "fallback-deeplink-when-cant-paste-secrets-with_skill-iter7",
+  "eval_name": "fallback-deeplink-when-cant-paste-secrets",
+  "config": "with_skill",
+  "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0},
+  "expectations": [
+    {
+      "id": "api_key_mode_question_asked",
+      "text": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets).",
+      "passed": true,
+      "evidence": "Transcript Checkpoint 2 item 4: 'API key mode: - Paste secret key (sk-kelet-...) — primary path. - I'll grab one. - I can't paste secrets here.' All three options presented; developer picked the third: 'I can't paste secrets here'."
+    },
+    {
+      "id": "fallback_deeplink_generated",
+      "text": "Synthetic evaluator fallback deeplink is generated via Bash — base64url-encoded markdown link to console.kelet.ai/<project>/synthetics/setup?deeplink=. Not shown as a copy-paste code block.",
+      "passed": true,
+      "evidence": "Transcript renders inline markdown link '[Open Kelet synthetic setup → docs-ai-fallback](https://console.kelet.ai/docs-ai-fallback/synthetics/setup?deeplink=eyJ1c2VfY2FzZSI6...)' — a long base64url payload, displayed as a clickable link not a code block."
+    },
+    {
+      "id": "no_curl_to_api",
+      "text": "No curl invocation to api.kelet.ai or localhost on the auto-create endpoint — the user declined to paste a key, so the primary curl path must be skipped entirely.",
+      "passed": true,
+      "evidence": "Transcript: 'No network call was made from this session — no curl to api.kelet.ai. The link above is a pure client-side deeplink...'. The transcript contains no curl command anywhere; fallback path taken end-to-end."
+    },
+    {
+      "id": "project_name_unverified_warning",
+      "text": "Skill surfaces the 'I can't verify the project name without a key' caveat to the developer.",
+      "passed": true,
+      "evidence": "Transcript Fallback section: '⚠️ I cannot verify that the project docs-ai-fallback exists without a key. Please make sure the name in the link below exactly matches the project you created at console.kelet.ai. A wrong name is a silent routing failure — your traces will upload but be invisible in RCA.' Also repeated in Phase V: '⚠️ Project name unverified (no API check possible) — silent 404 risk if the name doesn't match.'"
+    }
+  ]
+}

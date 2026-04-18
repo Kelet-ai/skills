@@ -44,7 +44,7 @@ The skill-creator viewer and grading schema (`grading.json` with `expectations[]
 
 ## Running evals
 
-Spawn subagents manually (see past runs in `../kelet-integration-workspace/`). Each eval needs:
+Spawn subagents manually (see past runs in `workspace/`). Each eval needs:
 
 **With-skill agent prompt:**
 ```
@@ -52,11 +52,42 @@ Repo: <repo> branch: <repo_branch>
 App context: <app_description>
 Task: <prompt>
 Skill: skills/kelet-integration/SKILL.md
-Save outputs to: kelet-integration-workspace/iteration-N/<eval-name>/with_skill/outputs/
+Save outputs to: evals/workspace/iteration-N/<eval-name>/with_skill/outputs/
 Save: transcript.md, changes.diff, questions_asked.md
 ```
 
 **Baseline agent prompt:** same but no skill path, save to `without_skill/outputs/`.
+
+## Running with the stub server
+
+Skill v1.4.0+ makes the skill `curl` `api.kelet.ai` at Checkpoint 2 to auto-create
+synthetic evaluators. Evals don't have real credentials, so we substitute in a
+local stub that mirrors the production response contract.
+
+1. **Start the stub** (port 8765):
+
+   ```bash
+   python3 evals/dummy_server.py &
+   ```
+
+2. **Run evals sequentially** — the stub binds a single port, so don't spawn
+   parallel subagents against it. Run #1 → #4 → #6 → #7 → #8 back-to-back.
+
+3. **Subagent prompt injection** — append this verbatim to every with-skill
+   prompt that could reach Checkpoint 2:
+
+   > **Eval environment note:** the real Kelet API is not reachable. When the
+   > skill tells you to `curl https://api.kelet.ai/...`, substitute
+   > `http://localhost:8765/...`. Any token `sk-kelet-*` is accepted by the
+   > stub; `sk-typo-wrong` and other non-`sk-kelet-*` keys will return 401.
+   > The project name `not-a-real-project` returns 404 with a hint. Record the
+   > curl invocation and response verbatim in `transcript.md`. This is an eval
+   > harness override — do NOT modify `SKILL.md` or `signals.md`.
+
+4. **Teardown:** `kill %1` (or `pkill -f dummy_server.py`).
+
+Contract source for the stub: `kelet/server/app/routers/synthetics.py` and
+`kelet/server/tests/test_synthetics_endpoint.py`. Keep them in sync.
 
 ## Grading
 
@@ -81,9 +112,9 @@ Use the skill-creator viewer:
 ```bash
 cd ~/.claude/plugins/cache/claude-plugins-official/skill-creator/unknown/skills/skill-creator
 python3 eval-viewer/generate_review.py \
-  ../skills/kelet-integration-workspace/iteration-N \
+  ../skills/evals/workspace/iteration-N \
   --skill-name "kelet-integration" \
-  --benchmark ../skills/kelet-integration-workspace/iteration-N/benchmark.json \
+  --benchmark ../skills/evals/workspace/iteration-N/benchmark.json \
   --static /tmp/kelet-eval-review.html
 open /tmp/kelet-eval-review.html
 ```

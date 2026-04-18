@@ -1,0 +1,638 @@
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..c7330c7 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -3,6 +3,7 @@ import logging
+ from contextlib import asynccontextmanager
+ from typing import cast
+ 
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -13,6 +14,10 @@ from docs_loader import docs_cache
+ from routers.chat import router as chat_router
+ from settings import settings
+ 
++# Kelet: reads KELET_API_KEY + KELET_PROJECT from env. Silent if misconfigured
++# — verify in https://console.kelet.ai.
++kelet.configure()
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+diff --git a/frontend/.env.example b/frontend/.env.example
+new file mode 100644
+index 0000000..4dd694a
+--- /dev/null
++++ b/frontend/.env.example
+@@ -0,0 +1,2 @@
++VITE_KELET_PUBLISHABLE_KEY=pk-kelet-...
++VITE_KELET_PROJECT=docs-ai-react-eval
+diff --git a/frontend/.gitignore b/frontend/.gitignore
+new file mode 100644
+index 0000000..9c97bbd
+--- /dev/null
++++ b/frontend/.gitignore
+@@ -0,0 +1,3 @@
++node_modules
++dist
++.env
+diff --git a/frontend/index.html b/frontend/index.html
+new file mode 100644
+index 0000000..4215bb3
+--- /dev/null
++++ b/frontend/index.html
+@@ -0,0 +1,12 @@
++<!doctype html>
++<html lang="en">
++  <head>
++    <meta charset="UTF-8" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <title>docs-ai chat</title>
++  </head>
++  <body>
++    <div id="root"></div>
++    <script type="module" src="/src/main.tsx"></script>
++  </body>
++</html>
+diff --git a/frontend/package.json b/frontend/package.json
+new file mode 100644
+index 0000000..a6653cf
+--- /dev/null
++++ b/frontend/package.json
+@@ -0,0 +1,23 @@
++{
++  "name": "docs-ai-frontend",
++  "private": true,
++  "version": "0.0.1",
++  "type": "module",
++  "scripts": {
++    "dev": "vite",
++    "build": "tsc -b && vite build",
++    "preview": "vite preview"
++  },
++  "dependencies": {
++    "@kelet-ai/feedback-ui": "^0.1.0",
++    "react": "^18.3.1",
++    "react-dom": "^18.3.1"
++  },
++  "devDependencies": {
++    "@types/react": "^18.3.12",
++    "@types/react-dom": "^18.3.1",
++    "@vitejs/plugin-react": "^4.3.3",
++    "typescript": "^5.6.3",
++    "vite": "^5.4.10"
++  }
++}
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+new file mode 100644
+index 0000000..397caa9
+--- /dev/null
++++ b/frontend/src/App.tsx
+@@ -0,0 +1,179 @@
++import { useRef, useState, type FormEvent } from 'react';
++import { VoteFeedback } from '@kelet-ai/feedback-ui';
++
++type Role = 'user' | 'assistant';
++
++interface Message {
++  id: string;
++  role: Role;
++  content: string;
++  // For assistant messages: session id of the turn that produced this reply.
++  // This is the SAME id the server used inside agentic_session() — so the
++  // VoteFeedback signal correlates to the exact trace.
++  sessionId?: string;
++}
++
++export function App() {
++  const [messages, setMessages] = useState<Message[]>([]);
++  const [input, setInput] = useState('');
++  const [busy, setBusy] = useState(false);
++  // Sticky session ID for this browser tab. Server generates on first POST
++  // (returned via X-Session-ID) and we reuse it for multi-turn history.
++  const sessionIdRef = useRef<string | null>(null);
++
++  async function send(e: FormEvent) {
++    e.preventDefault();
++    const text = input.trim();
++    if (!text || busy) return;
++
++    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: text };
++    const assistantId = crypto.randomUUID();
++    setMessages((m) => [...m, userMsg, { id: assistantId, role: 'assistant', content: '' }]);
++    setInput('');
++    setBusy(true);
++
++    try {
++      const res = await fetch('/chat', {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({
++          message: text,
++          session_id: sessionIdRef.current,
++        }),
++      });
++
++      const serverSessionId = res.headers.get('X-Session-ID');
++      if (serverSessionId) sessionIdRef.current = serverSessionId;
++      // Attach the session id to the assistant message so VoteFeedback wires
++      // its signal to the exact agentic_session the server just ran.
++      setMessages((m) =>
++        m.map((msg) =>
++          msg.id === assistantId ? { ...msg, sessionId: serverSessionId ?? undefined } : msg,
++        ),
++      );
++
++      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
++
++      const reader = res.body.getReader();
++      const decoder = new TextDecoder();
++      let buffer = '';
++      while (true) {
++        const { done, value } = await reader.read();
++        if (done) break;
++        buffer += decoder.decode(value, { stream: true });
++        const lines = buffer.split('\n');
++        buffer = lines.pop() ?? '';
++        for (const line of lines) {
++          if (!line.startsWith('data: ')) continue;
++          const payload = line.slice(6).trim();
++          if (payload === '[DONE]') continue;
++          try {
++            const evt = JSON.parse(payload) as {
++              chunk?: string;
++              message_over?: boolean;
++              error?: string;
++            };
++            if (evt.chunk) {
++              setMessages((m) =>
++                m.map((msg) =>
++                  msg.id === assistantId ? { ...msg, content: msg.content + evt.chunk } : msg,
++                ),
++              );
++            }
++          } catch {
++            /* ignore malformed chunks */
++          }
++        }
++      }
++    } catch (err) {
++      setMessages((m) =>
++        m.map((msg) =>
++          msg.id === assistantId
++            ? { ...msg, content: msg.content || 'Something went wrong. Please try again.' }
++            : msg,
++        ),
++      );
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  return (
++    <div className="app">
++      <header className="header">
++        <div className="title">docs-ai chat</div>
++      </header>
++      <main className="messages">
++        {messages.map((msg) =>
++          msg.role === 'user' ? (
++            <div key={msg.id} className="msg user">
++              <div className="bubble">{msg.content}</div>
++            </div>
++          ) : (
++            <div key={msg.id} className="msg assistant">
++              <div className="bubble">{msg.content || '…'}</div>
++              {msg.sessionId && msg.content ? (
++                <VoteFeedback.Root session_id={msg.sessionId}>
++                  <div className="feedback">
++                    <VoteFeedback.UpvoteButton asChild>
++                      {({ isSelected }: { isSelected: boolean }) => (
++                        <button
++                          className="vote-btn"
++                          data-selected={isSelected}
++                          aria-label="Good response"
++                          type="button"
++                        >
++                          Up
++                        </button>
++                      )}
++                    </VoteFeedback.UpvoteButton>
++                    <VoteFeedback.DownvoteButton asChild>
++                      {({ isSelected }: { isSelected: boolean }) => (
++                        <button
++                          className="vote-btn"
++                          data-selected={isSelected}
++                          aria-label="Bad response"
++                          type="button"
++                        >
++                          Down
++                        </button>
++                      )}
++                    </VoteFeedback.DownvoteButton>
++                    <VoteFeedback.Popover>
++                      <div className="popover">
++                        <VoteFeedback.Textarea placeholder="What went wrong? (optional)" />
++                        <VoteFeedback.SubmitButton asChild>
++                          {() => (
++                            <button className="submit" type="button">
++                              Send
++                            </button>
++                          )}
++                        </VoteFeedback.SubmitButton>
++                      </div>
++                    </VoteFeedback.Popover>
++                  </div>
++                </VoteFeedback.Root>
++              ) : null}
++            </div>
++          ),
++        )}
++      </main>
++      <form className="composer" onSubmit={send}>
++        <textarea
++          value={input}
++          onChange={(e) => setInput(e.target.value)}
++          placeholder="Ask about the docs…"
++          onKeyDown={(e) => {
++            if (e.key === 'Enter' && !e.shiftKey) {
++              e.preventDefault();
++              void send(e as unknown as FormEvent);
++            }
++          }}
++        />
++        <button type="submit" disabled={busy || !input.trim()}>
++          Send
++        </button>
++      </form>
++    </div>
++  );
++}
+diff --git a/frontend/src/main.tsx b/frontend/src/main.tsx
+new file mode 100644
+index 0000000..23f02ab
+--- /dev/null
++++ b/frontend/src/main.tsx
+@@ -0,0 +1,16 @@
++import React from 'react';
++import ReactDOM from 'react-dom/client';
++import { KeletProvider } from '@kelet-ai/feedback-ui';
++import { App } from './App';
++import './styles.css';
++
++const project = import.meta.env.VITE_KELET_PROJECT as string;
++const publishableKey = import.meta.env.VITE_KELET_PUBLISHABLE_KEY as string;
++
++ReactDOM.createRoot(document.getElementById('root')!).render(
++  <React.StrictMode>
++    <KeletProvider apiKey={publishableKey} project={project}>
++      <App />
++    </KeletProvider>
++  </React.StrictMode>,
++);
+diff --git a/frontend/src/styles.css b/frontend/src/styles.css
+new file mode 100644
+index 0000000..5feb9c7
+--- /dev/null
++++ b/frontend/src/styles.css
+@@ -0,0 +1,196 @@
++:root {
++  --bg: #0b0c10;
++  --panel: #14161c;
++  --border: #232733;
++  --text: #e7ebf3;
++  --muted: #8b93a7;
++  --accent: #6aa2ff;
++  --user: #1f2937;
++  --assistant: #11141b;
++  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Inter, sans-serif;
++  color-scheme: dark;
++}
++
++* {
++  box-sizing: border-box;
++}
++
++body {
++  margin: 0;
++  background: var(--bg);
++  color: var(--text);
++}
++
++.app {
++  display: flex;
++  flex-direction: column;
++  height: 100vh;
++  max-width: 760px;
++  margin: 0 auto;
++  padding: 16px;
++}
++
++.header {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  padding: 8px 4px 16px;
++  border-bottom: 1px solid var(--border);
++}
++
++.title {
++  font-weight: 600;
++  font-size: 15px;
++  letter-spacing: 0.02em;
++}
++
++.messages {
++  flex: 1;
++  overflow-y: auto;
++  padding: 16px 4px;
++  display: flex;
++  flex-direction: column;
++  gap: 14px;
++}
++
++.msg {
++  display: flex;
++  flex-direction: column;
++  gap: 6px;
++  max-width: 90%;
++}
++
++.msg.user {
++  align-self: flex-end;
++}
++
++.msg.assistant {
++  align-self: flex-start;
++  width: 100%;
++}
++
++.bubble {
++  padding: 10px 14px;
++  border-radius: 10px;
++  line-height: 1.5;
++  font-size: 14px;
++  white-space: pre-wrap;
++  word-wrap: break-word;
++  border: 1px solid var(--border);
++}
++
++.msg.user .bubble {
++  background: var(--user);
++}
++
++.msg.assistant .bubble {
++  background: var(--assistant);
++}
++
++.feedback {
++  position: relative;
++  display: flex;
++  gap: 6px;
++  padding-left: 2px;
++}
++
++.vote-btn {
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  width: 28px;
++  height: 28px;
++  border-radius: 6px;
++  border: 1px solid var(--border);
++  background: transparent;
++  color: var(--muted);
++  cursor: pointer;
++  font-size: 13px;
++  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
++}
++
++.vote-btn:hover {
++  color: var(--text);
++  border-color: var(--accent);
++}
++
++.vote-btn[data-selected='true'] {
++  color: var(--accent);
++  border-color: var(--accent);
++}
++
++.popover {
++  position: absolute;
++  bottom: calc(100% + 8px);
++  left: 0;
++  background: var(--panel);
++  border: 1px solid var(--border);
++  border-radius: 8px;
++  padding: 10px;
++  width: 280px;
++  display: flex;
++  flex-direction: column;
++  gap: 8px;
++  z-index: 5;
++}
++
++.popover textarea {
++  width: 100%;
++  min-height: 64px;
++  resize: vertical;
++  background: var(--bg);
++  border: 1px solid var(--border);
++  border-radius: 6px;
++  color: var(--text);
++  padding: 8px;
++  font-family: inherit;
++  font-size: 13px;
++}
++
++.popover button.submit {
++  align-self: flex-end;
++  padding: 6px 10px;
++  border-radius: 6px;
++  border: 1px solid var(--accent);
++  background: var(--accent);
++  color: #0b0c10;
++  font-weight: 600;
++  cursor: pointer;
++  font-size: 12px;
++}
++
++.composer {
++  display: flex;
++  gap: 8px;
++  padding-top: 12px;
++  border-top: 1px solid var(--border);
++}
++
++.composer textarea {
++  flex: 1;
++  min-height: 44px;
++  max-height: 160px;
++  resize: none;
++  background: var(--panel);
++  border: 1px solid var(--border);
++  border-radius: 8px;
++  padding: 10px 12px;
++  color: var(--text);
++  font-family: inherit;
++  font-size: 14px;
++}
++
++.composer button {
++  padding: 0 16px;
++  border-radius: 8px;
++  border: 1px solid var(--accent);
++  background: var(--accent);
++  color: #0b0c10;
++  font-weight: 600;
++  cursor: pointer;
++}
++
++.composer button:disabled {
++  opacity: 0.5;
++  cursor: not-allowed;
++}
+diff --git a/frontend/tsconfig.json b/frontend/tsconfig.json
+new file mode 100644
+index 0000000..1ba8daf
+--- /dev/null
++++ b/frontend/tsconfig.json
+@@ -0,0 +1,21 @@
++{
++  "compilerOptions": {
++    "target": "ES2022",
++    "useDefineForClassFields": true,
++    "lib": ["ES2022", "DOM", "DOM.Iterable"],
++    "module": "ESNext",
++    "skipLibCheck": true,
++    "moduleResolution": "bundler",
++    "allowImportingTsExtensions": true,
++    "resolveJsonModule": true,
++    "isolatedModules": true,
++    "noEmit": true,
++    "jsx": "react-jsx",
++    "strict": true,
++    "noUnusedLocals": true,
++    "noUnusedParameters": true,
++    "noFallthroughCasesInSwitch": true,
++    "types": ["vite/client"]
++  },
++  "include": ["src"]
++}
+diff --git a/frontend/vite.config.ts b/frontend/vite.config.ts
+new file mode 100644
+index 0000000..da2353d
+--- /dev/null
++++ b/frontend/vite.config.ts
+@@ -0,0 +1,13 @@
++import { defineConfig } from 'vite';
++import react from '@vitejs/plugin-react';
++
++export default defineConfig({
++  plugins: [react()],
++  server: {
++    port: 5173,
++    proxy: {
++      '/chat': 'http://localhost:8001',
++      '/health': 'http://localhost:8001',
++    },
++  },
++});
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..e7ac0ff 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -1,8 +1,10 @@
+ """Chat endpoints — POST /chat (session, SSE) and GET /chat (stateless, plain text)."""
+ import json
+ import logging
++import uuid
+ from typing import AsyncGenerator
+ 
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -36,25 +38,29 @@ async def _run_agent_stream(
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        # App owns the session ID (Redis-generated UUID) — pydantic-ai's
++        # auto-instrumentation doesn't know about it, so we MUST wrap the run
++        # in agentic_session so traces, signals, and VoteFeedback all correlate.
++        async with kelet.agentic_session(session_id=session.session_id):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+@@ -91,11 +97,14 @@ async def chat_stateless(
+         stateless=True,
+     )
+ 
+-    async with chat_agent.iter(q, deps=deps) as run:
+-        async for _ in run:
+-            pass
+-        result = run.result
+-        output = result.output if result is not None else ""
++    # Stateless endpoint has no persistent session — mint a one-shot UUID so
++    # the trace still groups under a session in the Kelet console.
++    async with kelet.agentic_session(session_id=str(uuid.uuid4())):
++        async with chat_agent.iter(q, deps=deps) as run:
++            async for _ in run:
++                pass
++            result = run.result
++            output = result.output if result is not None else ""
+     return PlainTextResponse(output)
+ 
+ 
+diff --git a/src/settings/__init__.py b/src/settings/__init__.py
+index 89f6c9a..dc0e771 100644
+--- a/src/settings/__init__.py
++++ b/src/settings/__init__.py
+@@ -16,7 +16,7 @@ class Settings(BaseSettings):
+     docs_allowed_topics: str = "scanned docs"
+     docs_custom_instructions: str = ""
+     docs_system_prompt_file: str = ""
+-    kelet_project: str = "docs_ai"
++    kelet_project: str = "docs-ai-react-eval"
+     kelet_api_key: str | None = None
+ 
+     @field_validator("docs_custom_instructions")

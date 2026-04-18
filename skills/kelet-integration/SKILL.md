@@ -13,7 +13,7 @@ metadata:
   author: kelet-ai
   url: https://kelet.ai
   version: "1.4.0"
-allowed-tools: Read Write Edit Bash WebFetch(https://docs-ai.kelet.ai) WebFetch(https://kelet.ai)
+allowed-tools: Read Write Edit Glob Grep Bash AskUserQuestion ExitPlanMode WebFetch(https://docs-ai.kelet.ai) WebFetch(https://kelet.ai)
 ---
 
 # Kelet Integration
@@ -217,6 +217,8 @@ A session = one unit of work. New context = new session.
 
 **`agentic_session()` NOT required** (auto-instrumented):
 LangChain/LangGraph · LlamaIndex · CrewAI · Haystack · Google ADK (`kelet[google-adk]` recommended) · pydantic-ai · DSPy · Langfuse · Langroid · anything using OpenInference/OpenLLMetry
+
+⚠️ **Override — read the REQUIRED block below first.** The list above assumes the framework also owns the session ID (short-lived in-process runs). If the app generates the session ID itself (Redis, DB, server-issued UUID) or you orchestrate multiple LLM calls across requests, `agentic_session(session_id=...)` is REQUIRED *regardless of framework* — the framework doesn't know your ID and spans become unlinked. When in doubt, wrap.
 
 ⚠️ **Bare LiteLLM** — traces are auto-captured, but LiteLLM does **not** propagate session/agent context into its spans. If LiteLLM is called directly (not through another supported framework like Google ADK), wrap calls in `agentic_session()` (and optionally `kelet.agent()`) to group them. When LiteLLM runs under another instrumented framework, the parent span provides context — no wrapping needed.
 

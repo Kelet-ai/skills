@@ -1,0 +1,119 @@
+diff --git a/.env.example b/.env.example
+index 84e8ee7..8a7a66a 100644
+--- a/.env.example
++++ b/.env.example
+@@ -11,3 +11,8 @@ SESSION_TTL_SECONDS=1800
+ # Set to the proxy CIDR (or "*") when running behind a reverse proxy or load balancer
+ # so uvicorn resolves the real client IP from X-Forwarded-For for rate limiting.
+ # UVICORN_FORWARDED_ALLOW_IPS=*
++
++# Kelet — observability + RCA
++# Server-only secret key. Store in Fly.io secrets (fly secrets set KELET_API_KEY=sk-...).
++# KELET_API_KEY=sk-kelet-...
++KELET_PROJECT=docs-ai-fallback
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..0b5050d 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -3,6 +3,7 @@ import logging
+ from contextlib import asynccontextmanager
+ from typing import cast
+ 
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -15,6 +16,11 @@ from settings import settings
+ 
+ logger = logging.getLogger(__name__)
+ 
++# Kelet tracing — reads KELET_API_KEY + KELET_PROJECT from env at call time.
++# pydantic-ai is auto-instrumented, so no decorator is needed on the agent itself;
++# session grouping is handled inside routers/chat.py via kelet.agentic_session().
++kelet.configure()
++
+ 
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..b175a75 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -1,8 +1,10 @@
+ """Chat endpoints — POST /chat (session, SSE) and GET /chat (stateless, plain text)."""
+ import json
+ import logging
++import uuid
+ from typing import AsyncGenerator
+ 
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -36,25 +38,28 @@ async def _run_agent_stream(
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        # App owns the session ID (Redis) — pydantic-ai can't see it.
++        # Wrap the run so all LLM spans group under the correct Kelet session.
++        async with kelet.agentic_session(session_id=session.session_id):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+@@ -91,11 +96,14 @@ async def chat_stateless(
+         stateless=True,
+     )
+ 
+-    async with chat_agent.iter(q, deps=deps) as run:
+-        async for _ in run:
+-            pass
+-        result = run.result
+-        output = result.output if result is not None else ""
++    # Stateless GET /chat has no persistent session — mint an ephemeral one so
++    # Kelet still groups the LLM spans under a single session for RCA.
++    async with kelet.agentic_session(session_id=str(uuid.uuid4())):
++        async with chat_agent.iter(q, deps=deps) as run:
++            async for _ in run:
++                pass
++            result = run.result
++            output = result.output if result is not None else ""
+     return PlainTextResponse(output)
+ 
+ 
