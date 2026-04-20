@@ -149,7 +149,7 @@ Think like an investigator planting clues: *if something goes wrong later, what 
 - `kind`: `FEEDBACK` · `EDIT` · `EVENT` · `METRIC` · `ARBITRARY` — `source`: `HUMAN` · `LABEL` · `SYNTHETIC`
 - Stack picks *how*, not *what*: React → `@kelet-ai/feedback-ui`; other frontends → TS SDK `signal()`; server → Python/TS SDK.
 - Candidates: vote, edit-on-AI-output, copy, retry, abandon, rephrase, session reset. Copy is usually worth it anywhere AI text renders.
-- **Rephrase ≠ prefix match.** Clarifications, negations, frustration, and — most valuable — implicit rephrase (same topic reworded, no keyword). Same for abandon/retry.
+- **Rephrase / abandon / retry → always LLM synthetic, never coded.** Prefix-match fragments triggers per-phrase, fires on innocent clarifications, and misses implicit rephrase (reworded, no keyword — where most value lives). Right layer: LLM synthetic scoring the *preceding* turn when user corrects/re-asks/abandons. Zero app code. Don't ship prefix-match as a "temporary" substitute.
 
 Prepare for Checkpoint 2: signal proposals + project name suggestion + "what you'll see" preview.
 
@@ -182,7 +182,7 @@ Single `AskUserQuestion` (`multiSelect: true`), structured as:
 
 Then run per [references/signals.md § Primary: API call](references/signals.md).
 
-On 200: `✅ Kelet is now watching {project}. First evaluator results in ~3min at https://console.kelet.ai/{project}/signals`
+On 200: `✅ Created N evaluators in {project}: {name1}, {name2}, {name3}. First results in ~3min at https://console.kelet.ai/{project}/signals`
 
 **Fallback (can't paste):** build the base64 markdown link per [references/signals.md](references/signals.md).
 
@@ -219,6 +219,15 @@ Two types — never mix:
 
 Write to config: `.env` → `KEY=value` · `.envrc` → `export KEY=value` · K8s → secrets manifest. Add to `.gitignore`. Never hardcode project name — always env var. When the app has both a server and a frontend, write keys to both env files — secret key to server `.env`, publishable key to `frontend/.env` (or wherever Vite/Next picks it up). Follow [references/deployment.md](references/deployment.md) for production.
 
+**Gating `configure()`.** Gate on the API key only — never AND on project:
+
+```python
+if settings.kelet_api_key:
+    kelet.configure(api_key=settings.kelet_api_key, project=settings.kelet_project)
+```
+
+AND-gating turns a blank-project drift into silent no-traces. Empty project with a valid key surfaces as a routing error in the console — that's what you want.
+
 ---
 
 ## Sessions
@@ -254,9 +263,10 @@ See [references/implementation.md](references/implementation.md) for the decisio
 **Python:**
 
 ```python
-kelet.configure()  # reads KELET_API_KEY + KELET_PROJECT from env
+kelet.configure(api_key=..., project=...)  # at startup
 async with kelet.agentic_session(session_id=session_id):
     result = await agent.run(...)
+kelet.shutdown()  # at teardown — flushes buffered spans, else silent drop on pod rotation
 ```
 
 **TypeScript** — `agenticSession` is **callback-based**, not a context manager (critical difference):
@@ -267,7 +277,7 @@ await agenticSession({ sessionId }, async () => {
 });
 ```
 
-**TS:** Call `configure({ project })` explicitly if not using env vars, or set `KELET_API_KEY` + `KELET_PROJECT` and it auto-resolves on first signal. **Python:** `kelet.configure()` reads env vars eagerly at call time — `KELET_PROJECT` must be set before calling it.
+**TS:** Call `configure({ project })` explicitly if not using env vars, or set `KELET_API_KEY` + `KELET_PROJECT` and it auto-resolves on first signal. **Python:** `kelet.configure()` reads env vars eagerly at call time. With `pydantic-settings` (loads `.env` into a Settings object, not `os.environ`), pass `api_key=` and `project=` explicitly — bare call raises `ValueError`.
 
 **Next.js:** `KeletExporter` in `instrumentation.ts` via `@vercel/otel`. Two silent-if-omitted configs — see stack-notes.md.
 **React:** `KeletProvider` at root. `VoteFeedback` / `useFeedbackState` / `useKeletSignal` for feedback.
@@ -281,6 +291,7 @@ await agenticSession({ sessionId }, async () => {
 - Every agentic entry point covered by `agentic_session()` or supported framework
 - Session ID consistent end-to-end: client → server → `agentic_session()` → response header → VoteFeedback
 - `configure()` called once at startup, not per-request
+- `kelet.shutdown()` called at teardown (FastAPI `lifespan` `finally:` / Django SIGTERM / Celery `worker_shutdown`) — else BatchSpanProcessor drops buffered spans
 - Secret key server-only — never in frontend bundle
 - Check [references/common-mistakes.md](references/common-mistakes.md) for silent failure modes on detected stack
 - Smoke test: trigger LLM call → open Kelet console → verify sessions appear (allow a few minutes)

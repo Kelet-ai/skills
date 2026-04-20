@@ -23,6 +23,7 @@ Functions (all in `kelet` namespace):
 - `kelet.get_session_id()` — get current session ID from context
 - `kelet.create_kelet_processor()` — for manual OTEL setup (e.g.
   `logfire.configure(additional_span_processors=[kelet.create_kelet_processor()])`)
+- `kelet.shutdown()` — flush + close exporters. Auto-`atexit`; call explicitly in FastAPI lifespan / Django SIGTERM / Celery `worker_shutdown`.
 
 ## TypeScript SDK
 
