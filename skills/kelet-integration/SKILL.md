@@ -20,8 +20,6 @@ allowed-tools: Read Write Edit Glob Grep Bash AskUserQuestion ExitPlanMode WebFe
 
 **Enter plan mode immediately.** First action of the skill: call `EnterPlanMode` so the entire analysis → mapping → signals → plan sequence runs read-only. Only call `ExitPlanMode` after the user approves the final implementation plan at Implementation Approval.
 
-**Open with the welcome banner.** Immediately after `EnterPlanMode`, emit the Onboarding banner + bullets (see Onboarding section) as your first user-visible output — before any Read/Glob/Grep/Explore calls, before the progress tracker, before any mapping text.
-
 **North star: brilliant developer experience, fastest possible time to value.** The developer should feel like Kelet integrated itself — minimal inputs from them, maximum value immediately visible in the console.
 
 **Kelet never raises exceptions.** All SDK errors are silenced — a misconfigured integration looks identical to a working one.
@@ -32,14 +30,14 @@ allowed-tools: Read Write Edit Glob Grep Bash AskUserQuestion ExitPlanMode WebFe
 
 ## Onboarding
 
-**Open with a welcome banner.** Banner: `🕵️  Welcome to Kelet — your AI detective`. Lead with the detective framing — Kelet is a reasoning agent that ingests traces + signals, clusters failures, suggests fixes. Keep the metaphor alive through the bullets:
+Open with a welcome banner: `🕵️  Welcome to Kelet — your AI detective`. Kelet is a reasoning agent that ingests traces + signals, clusters failures, suggests fixes. Teach these concepts before any code — keep the detective metaphor alive through the bullets:
 
-- **Trace = the scene.** Every LLM call + tool use auto-recorded after `kelet.configure()`.
-- **Signal = the tip.** Dropped at meaningful moments (👎, edit, abandon) to point the detective at something worth investigating — not a verdict. 👎 ≠ "this session failed"; it means _start looking here_. More tips → narrower investigation → faster fix.
-- **Synthetic = the detective's forensic tools.** Automated signals from trace data alone. No code.
-- **Session = the case file.** Traces grouped by one unit of work — how events get correlated.
-- **Project = the jurisdiction.** One per agentic use case. Wrong project = invisible in RCA.
-- Next: silent analysis + **≤3 `AskUserQuestion` calls (ideally 2)**
+- **Trace = the scene.** Every LLM call + tool use auto-recorded after `kelet.configure()` — model, inputs/outputs, latency, tokens, errors. Zero code changes.
+- **Signal = the tip.** Dropped at meaningful moments (👎, edit, abandon) to point the detective at something worth investigating — not a verdict. 👎 ≠ "this session failed"; it means _start looking here_. Edit = _close but wrong_. Abandon = _gave up_. More tips → narrower investigation → faster fix.
+- **Synthetic = the detective's forensic tools.** Automated signals Kelet runs on every session using trace data alone. No code.
+- **Session = the case file.** Traces grouped by one unit of work (one conversation, one request chain) — how events get correlated across multiple LLM calls.
+- **Project = the jurisdiction.** One logical boundary per agentic use case (support bot vs. coding assistant = two projects; prod vs. staging = two projects). Wrong project = invisible in RCA.
+- What's ahead: silent analysis + **≤3 `AskUserQuestion` calls (ideally 2)**
 
 ---
 
