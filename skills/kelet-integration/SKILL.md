@@ -32,12 +32,12 @@ allowed-tools: Read Write Edit Glob Grep Bash AskUserQuestion ExitPlanMode WebFe
 
 Open with a welcome banner: `🕵️  Welcome to Kelet — your AI detective`. Kelet is a reasoning agent that ingests traces + signals, clusters failures, suggests fixes. Teach these concepts before any code — keep the detective metaphor alive through the bullets:
 
-- **Trace = the scene.** Every LLM call + tool use auto-recorded after `kelet.configure()` — model, inputs/outputs, latency, tokens, errors. Zero code changes.
-- **Signal = the tip.** Dropped at meaningful moments (👎, edit, abandon) to point the detective at something worth investigating — not a verdict. 👎 ≠ "this session failed"; it means _start looking here_. Edit = _close but wrong_. Abandon = _gave up_. More tips → narrower investigation → faster fix.
-- **Synthetic = the detective's forensic tools.** Automated signals Kelet runs on every session using trace data alone. No code.
-- **Session = the case file.** Traces grouped by one unit of work (one conversation, one request chain) — how events get correlated across multiple LLM calls.
-- **Project = the jurisdiction.** One logical boundary per agentic use case (support bot vs. coding assistant = two projects; prod vs. staging = two projects). Wrong project = invisible in RCA.
-- What's ahead: silent analysis + **≤3 `AskUserQuestion` calls (ideally 2)**
+- **Trace = the scene.** Every LLM call + tool use auto-recorded after `kelet.configure()`.
+- **Signal = the tip.** 👎, edit, abandon — points the detective at something worth investigating. Not a verdict: 👎 means _start looking here_.
+- **Synthetic = forensic tools.** Automated signals from trace data. No code.
+- **Session = the case file.** Traces grouped by one unit of work.
+- **Project = the jurisdiction.** One per agentic use case. Wrong project = invisible in RCA.
+- Next: silent analysis + **≤3 `AskUserQuestion` calls (ideally 2)**
 
 ---
 
