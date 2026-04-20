@@ -53,15 +53,15 @@ When in doubt: lightweight. Every extra code change is a cost to the developer.
 
 ## Presentation Style
 
-Open each checkpoint with a banner (`🔍  ANALYSIS · PROJECT + WORKFLOW MAPPING`) and close with a completion box before each question. Tone: warm + expert. Concept before mechanics.
+Tone: warm + expert. Concept before mechanics. Open each checkpoint with a banner: `<emoji>  <PHASE>` — one word, uppercase, nothing else. Phases: `MAPPING`, `SIGNALS`, `PLAN`, `IMPLEMENT`, `VERIFY`.
 
-**Progress tracker — high-level phases only.** Use exactly these five labels, nothing else:
+Progress tracker — exactly these labels:
 
 ```
-📍  Analysis 🔄 → Mapping ○ → Signals ○ → Plan ○ → Implement ○
+📍  Mapping 🔄 → Signals ○ → Plan ○ → Implement ○ → Verify ○
 ```
 
-Do NOT invent sub-phases (`0a`, `0b`, `Phase 0.1`, `Step 2.3`, etc.). Internal work — reading files, drafting the diagram, picking evaluators — stays silent inside the current phase. The user sees progress only when a phase flips to ✅.
+Internal work (e.g. `0a`, `0b`, `1`, sub-steps) stays silent. The user sees progress only when a phase flips to ✅.
 
 ---
 
@@ -72,7 +72,7 @@ Do NOT invent sub-phases (`0a`, `0b`, `Phase 0.1`, `Step 2.3`, etc.). Internal w
 - **At most 3 `AskUserQuestion` calls total (ideally 2).** If you can infer it — don't ask.
 - **Pre-flight (outside budget):** If no app description in trigger message, ask: "What does your AI app do and how do users interact with it?" before reading files.
 - **Silent analysis first.** Stay in plan mode through Checkpoints 1 and 2; only call `ExitPlanMode` at Implementation Approval.
-- **If Kelet already in deps:** skip setup, focus on what was asked. Analysis pass + Phase V still apply.
+- **If Kelet already in deps:** skip setup, focus on what was asked. Analysis pass + Verify still apply.
 - **Match the app's visual style.** Any UI added (VoteFeedback buttons, copy button, retry, etc.) must use the app's existing CSS classes, design tokens, and component patterns — not arbitrary inline styles or emoji defaults. Read the stylesheet and existing components before writing children.
 
 Question slots:
@@ -274,7 +274,7 @@ await agenticSession({ sessionId }, async () => {
 
 ---
 
-## Phase V: Verification
+## Verification
 
 > 🕵️ Kelet silences errors — build passing is not evidence. Only the console confirms it.
 
