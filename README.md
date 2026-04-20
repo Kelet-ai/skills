@@ -56,11 +56,11 @@ Set up Kelet for my multi-agent system
 
 ## Links
 
-- [Kelet Platform](https://kelet.ai)
-- [Console](https://console.kelet.ai)
+- [Kelet Website](https://kelet.ai)
+- [Kelet Docs](https://kelet.ai/docs)
+- [Kelet Console](https://console.kelet.ai)
 - [Python SDK](https://github.com/Kelet-ai/python-sdk)
 - [TypeScript SDK](https://github.com/Kelet-ai/typescript-sdk)
-- [Agent Skills spec](https://agentskills.io/specification)
 
 ## License
 
