@@ -20,6 +20,8 @@ allowed-tools: Read Write Edit Glob Grep Bash AskUserQuestion ExitPlanMode WebFe
 
 **Enter plan mode immediately.** First action of the skill: call `EnterPlanMode` so the entire analysis → mapping → signals → plan sequence runs read-only. Only call `ExitPlanMode` after the user approves the final implementation plan at Implementation Approval.
 
+**Open with the welcome banner.** Immediately after `EnterPlanMode`, emit the Onboarding banner + bullets (see Onboarding section) as your first user-visible output — before any Read/Glob/Grep/Explore calls, before the progress tracker, before any mapping text.
+
 **North star: brilliant developer experience, fastest possible time to value.** The developer should feel like Kelet integrated itself — minimal inputs from them, maximum value immediately visible in the console.
 
 **Kelet never raises exceptions.** All SDK errors are silenced — a misconfigured integration looks identical to a working one.
