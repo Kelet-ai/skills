@@ -1,0 +1,13 @@
+{
+  "run_id": "fallback-deeplink-when-cant-paste-secrets-with_skill-iter8",
+  "eval_name": "fallback-deeplink-when-cant-paste-secrets",
+  "config": "with_skill",
+  "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0},
+  "expectations": [
+    {"id": "api_key_mode_question_asked", "text": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets).", "passed": true, "evidence": "questions_asked.md Q2 section D lists all three options (paste secret / I'll grab one / can't paste secrets). Transcript Checkpoint 2 shows the same three-option prompt."},
+    {"id": "fallback_deeplink_generated", "text": "Synthetic evaluator fallback deeplink is generated via Bash — base64url-encoded markdown link to console.kelet.ai/<project>/synthetics/setup?deeplink=. Not shown as a copy-paste code block.", "passed": true, "evidence": "Bash ran python3 -c 'import base64,json; ...urlsafe_b64encode...' producing '[Open Kelet synthetic setup → docs-ai-iter8-fallback](https://console.kelet.ai/docs-ai-iter8-fallback/synthetics/setup?deeplink=eyJ1c2VfY2FzZSI...)'. Rendered as markdown link, not code block."},
+    {"id": "no_curl_to_api", "text": "No curl invocation to api.kelet.ai or localhost on the auto-create endpoint — the user declined to paste a key, so the primary curl path must be skipped entirely.", "passed": true, "evidence": "No curl invoked against localhost:8765 or api.kelet.ai/api/projects/<project>/synthetics. Transcript explicitly notes: 'No curl was issued to the auto-create endpoint.'"},
+    {"id": "project_name_unverified_warning", "text": "Skill surfaces the 'I can't verify the project name without a key' caveat to the developer.", "passed": true, "evidence": "Transcript surfaces: '⚠️ I can't verify the project name without a key — make sure docs-ai-iter8-fallback matches exactly what you created in the Kelet console.'"},
+    {"id": "shutdown_wired", "text": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.", "passed": true, "evidence": "app/main.py lifespan diff: finally: → await docs_cache.stop() → await redis.aclose() → kelet.shutdown()."}
+  ]
+}

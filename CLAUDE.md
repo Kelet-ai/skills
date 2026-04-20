@@ -21,6 +21,8 @@ Each skill is a self-contained directory under `skills/`. The directory name mus
 2. Add reference files under `skills/<skill-name>/references/` if the skill needs supplemental detail
 3. Validate: `skills-ref validate ./skills/<skill-name>` (install: `npm i -g skills-ref`)
 
+**Don't bump `metadata.version` in SKILL.md — CI handles versioning.**
+
 ## Skill Writing Conventions
 
 **Skills teach concepts and nuance — not code.** Claude already knows Python, TypeScript, React, etc. Only include what

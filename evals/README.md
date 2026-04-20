@@ -105,16 +105,40 @@ Write `grading.json` to each run directory (NOT inside `outputs/`):
 }
 ```
 
+## Workspace = regression baselines
+
+Each `workspace/iteration-N/` dir is a **frozen snapshot** of one full eval sweep —
+the grading and benchmark at that point in time. These are the regression baselines:
+the next iteration's numbers are compared against them to detect drift when the SKILL
+changes. **After every full sweep, commit the iteration dir (including `benchmark.json`
+and all `<eval>/<config>/grading.json` files) to the PR** so the baseline moves with
+the skill.
+
+Implications:
+- They are **not** re-executed when `evals.json` changes. Adding a new assertion does
+  not retroactively fail a saved iteration — the baseline represents the skill's
+  behavior against the assertion set at the time of the run.
+- Each fresh eval run is a new agent invocation over `../docs-ai@<repo_branch>` (the
+  pre-integration state defined in `evals.json`), graded against the current assertion
+  list.
+
 ## Viewing results
 
-Use the skill-creator viewer:
+The checked-in `benchmark.json` uses a compact shape (good for PR diffs) that the
+skill-creator viewer doesn't render — convert it with `build_viewer_benchmark.py`
+first. The converter walks each `<eval>/<config>/grading.json` under the iteration
+directory and emits the viewer's expected shape (`run_summary: {<config>: {pass_rate:
+{mean, stddev}}}`, `runs[].{eval_id, run_number, result, expectations}`).
 
 ```bash
-cd ~/.claude/plugins/cache/claude-plugins-official/skill-creator/unknown/skills/skill-creator
-python3 eval-viewer/generate_review.py \
-  ../skills/evals/workspace/iteration-N \
+# 1. Build viewer-shaped benchmark from the per-run grading.json files
+python3 evals/build_viewer_benchmark.py evals/workspace/iteration-N > /tmp/iter-N.json
+
+# 2. Generate the HTML
+python3 ~/.claude/plugins/cache/claude-plugins-official/skill-creator/unknown/skills/skill-creator/eval-viewer/generate_review.py \
+  evals/workspace/iteration-N \
   --skill-name "kelet-integration" \
-  --benchmark ../skills/evals/workspace/iteration-N/benchmark.json \
+  --benchmark /tmp/iter-N.json \
   --static /tmp/kelet-eval-review.html
 open /tmp/kelet-eval-review.html
 ```

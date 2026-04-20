@@ -1,0 +1,64 @@
+{
+  "skill_name": "kelet-integration",
+  "metadata": {
+    "iteration": 8,
+    "purpose": "Validate PR #8 field-report fixes — shutdown_wired (code) across 7 evals + shutdown_preserved / no_coded_rephrase_detector (llm) on eval #5. First full 8-eval sweep; iteration 7 only covered 5."
+  },
+  "run_summary": [
+    {
+      "configuration": "with_skill (iter8)",
+      "mean_pass_rate": 1.0,
+      "n_evals": 8
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "fastapi-pydantic-ai-lightweight-with_skill-iter8",
+      "eval_name": "fastapi-pydantic-ai-lightweight",
+      "configuration": "with_skill (iter8)",
+      "summary": {"passed": 10, "failed": 0, "total": 10, "pass_rate": 1.0}
+    },
+    {
+      "run_id": "session-id-boundary-check-with_skill-iter8",
+      "eval_name": "session-id-boundary-check",
+      "configuration": "with_skill (iter8)",
+      "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}
+    },
+    {
+      "run_id": "already-has-kelet-partial-integration-with_skill-iter8",
+      "eval_name": "already-has-kelet-partial-integration",
+      "configuration": "with_skill (iter8)",
+      "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}
+    },
+    {
+      "run_id": "fastapi-pydantic-ai-with-react-ui-with_skill-iter8",
+      "eval_name": "fastapi-pydantic-ai-with-react-ui",
+      "configuration": "with_skill (iter8)",
+      "summary": {"passed": 11, "failed": 0, "total": 11, "pass_rate": 1.0}
+    },
+    {
+      "run_id": "expand-to-full-mode-with_skill-iter8",
+      "eval_name": "expand-to-full-mode",
+      "configuration": "with_skill (iter8)",
+      "summary": {"passed": 7, "failed": 0, "total": 7, "pass_rate": 1.0}
+    },
+    {
+      "run_id": "fallback-deeplink-when-cant-paste-secrets-with_skill-iter8",
+      "eval_name": "fallback-deeplink-when-cant-paste-secrets",
+      "configuration": "with_skill (iter8)",
+      "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}
+    },
+    {
+      "run_id": "wrong-project-name-surfaces-404-hint-with_skill-iter8",
+      "eval_name": "wrong-project-name-surfaces-404-hint",
+      "configuration": "with_skill (iter8)",
+      "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}
+    },
+    {
+      "run_id": "invalid-api-key-surfaces-401-with_skill-iter8",
+      "eval_name": "invalid-api-key-surfaces-401",
+      "configuration": "with_skill (iter8)",
+      "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0}
+    }
+  ]
+}

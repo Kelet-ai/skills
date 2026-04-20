@@ -1,0 +1,162 @@
+diff --git a/.env.example b/.env.example
+index 84e8ee7..d4f1d75 100644
+--- a/.env.example
++++ b/.env.example
+@@ -11,3 +11,10 @@ SESSION_TTL_SECONDS=1800
+ # Set to the proxy CIDR (or "*") when running behind a reverse proxy or load balancer
+ # so uvicorn resolves the real client IP from X-Forwarded-For for rate limiting.
+ # UVICORN_FORWARDED_ALLOW_IPS=*
++
++# Kelet — AI observability + RCA. Grab a secret key at https://console.kelet.ai/api-keys
++# and create the project in the console top-nav first. Blank key disables instrumentation
++# cleanly; wrong project name silently routes traces to a different project.
++# In production on Fly.io, set via: fly secrets set KELET_API_KEY=sk-kelet-... KELET_PROJECT=docs-ai
++KELET_API_KEY=
++KELET_PROJECT=
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..a4f6474 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -3,6 +3,7 @@ import logging
+ from contextlib import asynccontextmanager
+ from typing import cast
+ 
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -18,6 +19,13 @@ logger = logging.getLogger(__name__)
+ 
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
++    # Kelet — explicit kwargs because pydantic-settings loads .env into a Settings
++    # object (not os.environ), so bare kelet.configure() can't resolve env vars.
++    # Gate on api_key only — AND-gating with project would turn a blank-project
++    # drift into silent no-traces.
++    if settings.kelet_api_key:
++        kelet.configure(api_key=settings.kelet_api_key, project=settings.kelet_project)
++
+     if settings.redis_url is None:
+         # No REDIS_URL configured: use in-memory store (single-process, not persistent).
+         # FakeRedis has no maxsize cap; TTLs provide natural eviction
+@@ -37,6 +45,9 @@ async def lifespan(app: FastAPI):
+     finally:
+         await docs_cache.stop()
+         await redis.aclose()
++        # Flush buffered spans before Fly.io rotates the VM — BatchSpanProcessor
++        # silently drops the last few seconds of traces otherwise.
++        kelet.shutdown()
+ 
+ 
+ app = FastAPI(title="Docs AI", lifespan=lifespan)
+diff --git a/pyproject.toml b/pyproject.toml
+index eb9195b..d5ec039 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -13,6 +13,7 @@ dependencies = [
+     "httpx>=0.28",
+     "rank-bm25>=0.2.2",
+     "jinja2>=3.1",
++    "kelet>=0.1",
+ ]
+ 
+ [dependency-groups]
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..9740474 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -1,8 +1,10 @@
+ """Chat endpoints — POST /chat (session, SSE) and GET /chat (stateless, plain text)."""
+ import json
+ import logging
++import uuid
+ from typing import AsyncGenerator
+ 
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -35,26 +37,29 @@ async def _run_agent_stream(
+ ) -> AsyncGenerator[str, None]:
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
++    # Wrap the ENTIRE generator body (including the final [DONE] sentinel) — otherwise
++    # trailing spans get dropped when the context exits mid-stream.
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        async with kelet.agentic_session(session_id=session.session_id):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+@@ -91,11 +96,14 @@ async def chat_stateless(
+         stateless=True,
+     )
+ 
+-    async with chat_agent.iter(q, deps=deps) as run:
+-        async for _ in run:
+-            pass
+-        result = run.result
+-        output = result.output if result is not None else ""
++    # Stateless route has no persisted session — mint a one-shot UUID so Kelet
++    # groups this turn's spans into a single trace.
++    async with kelet.agentic_session(session_id=str(uuid.uuid4())):
++        async with chat_agent.iter(q, deps=deps) as run:
++            async for _ in run:
++                pass
++            result = run.result
++            output = result.output if result is not None else ""
+     return PlainTextResponse(output)
+ 
+ 
+diff --git a/src/settings/__init__.py b/src/settings/__init__.py
+index b20f27f..e77cfeb 100644
+--- a/src/settings/__init__.py
++++ b/src/settings/__init__.py
+@@ -16,6 +16,11 @@ class Settings(BaseSettings):
+     docs_allowed_topics: str = "scanned docs"
+     docs_custom_instructions: str = ""
+     docs_system_prompt_file: str = ""
++    # Kelet — secret key + project name. Gate configure() on api_key only; blank
++    # project with a valid key surfaces as a routing error in the console (desired
++    # loud failure), while AND-gating would turn that drift silent.
++    kelet_api_key: str = ""
++    kelet_project: str = ""
+ 
+     @field_validator("docs_custom_instructions")
+     @classmethod

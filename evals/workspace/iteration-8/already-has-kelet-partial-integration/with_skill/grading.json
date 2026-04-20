@@ -1,0 +1,13 @@
+{
+  "run_id": "already-has-kelet-partial-integration-with_skill-iter8",
+  "eval_name": "already-has-kelet-partial-integration",
+  "config": "with_skill",
+  "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0},
+  "expectations": [
+    {"id": "diagnoses_missing_session", "text": "Correctly identifies missing agentic_session() as the cause of unlinked traces", "passed": true, "evidence": "transcript.md Root cause section explicitly names app-owned Redis session_id + pydantic-ai override rule from SKILL.md Sessions, and cites common-mistakes.md 'DIY orchestration without agentic_session() → Sessions appear fragmented — each LLM call is a separate unlinked trace in Kelet'."},
+    {"id": "adds_agentic_session", "text": "Adds agentic_session() wrapping the agent call", "passed": true, "evidence": "src/routers/chat.py:41: async with kelet.agentic_session(session_id=session.session_id) wraps the full streaming body of _run_agent_stream, including the [DONE] sentinel."},
+    {"id": "no_redundant_setup", "text": "Does not re-ask for API keys or project name that are already configured. If configure() is present and correct, does not re-add it. Fixing a broken/wrong method (e.g. kelet.init() → kelet.configure()) is acceptable and does NOT count as redundant.", "passed": true, "evidence": "kelet.configure() not re-added (already present + correctly gated on settings.kelet_api_key only). No questions asked about keys/project. pyproject.toml retains existing kelet>=1.0."},
+    {"id": "phase_v_verification", "text": "Includes verification step: trigger LLM call and check console for sessions", "passed": true, "evidence": "transcript.md Phase V — Verify runs a silent-failure-mode checklist filtered to this stack and provides an explicit smoke test: curl -N -X POST http://localhost:8001/chat → read X-Session-ID header → open console.kelet.ai/docs-ai-iter8-partial/sessions."},
+    {"id": "shutdown_wired", "text": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.", "passed": true, "evidence": "Skill noticed shutdown was ALSO missing (secondary finding from common-mistakes.md) and added it. Diff: app/main.py finally block adds kelet.shutdown() after docs_cache.stop() and redis.aclose()."}
+  ]
+}

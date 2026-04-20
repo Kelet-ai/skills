@@ -133,6 +133,8 @@ Include only evaluators the developer selected. Idea fields: `id`, `name`, `desc
 - `failed > 0` → warn: "N ideas timed out — re-run the skill to retry those."
 - 200 → success. 401 → invalid key. 404 `project_not_found` → surface the server's hint. 504 / timeout → "Generator was slow. Re-run to retry — partial state was persisted." 5xx / network → fail loud.
 
+When surfacing success, echo evaluator names from the request body (the response does not include them).
+
 ### Fallback: deeplink
 
 **Only when the user declines to paste a secret key.** No project verification.

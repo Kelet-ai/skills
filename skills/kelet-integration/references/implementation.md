@@ -70,3 +70,13 @@ Call `shutdown()` explicitly in teardown or spans from the final seconds drop.
 
 - **Python**: auto `atexit`; call in FastAPI lifespan `finally` / Django SIGTERM / Celery `worker_shutdown`.
 - **TS**: auto `beforeExit` only — SIGINT/SIGTERM are not auto-handled (would override host's graceful shutdown). Install your own handler that awaits `shutdown()` before `process.exit(N)`.
+
+```python
+@asynccontextmanager
+async def lifespan(app):
+    kelet.configure(api_key=..., project=...)
+    try:
+        yield
+    finally:
+        kelet.shutdown()
+```
