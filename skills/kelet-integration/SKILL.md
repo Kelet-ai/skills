@@ -277,7 +277,7 @@ await agenticSession({ sessionId }, async () => {
 });
 ```
 
-**TS:** Call `configure({ project })` explicitly if not using env vars, or set `KELET_API_KEY` + `KELET_PROJECT` and it auto-resolves on first signal. **Python:** `kelet.configure()` reads env vars eagerly at call time. With `pydantic-settings` (loads `.env` into a Settings object, not `os.environ`), pass `api_key=` and `project=` explicitly — bare call raises `ValueError`.
+**TS:** Call `configure({ project })` explicitly if not using env vars, or set `KELET_API_KEY` + `KELET_PROJECT` and it auto-resolves on first signal. **Python:** `kelet.configure()` reads env vars eagerly at call time. With `pydantic-settings` (loads `.env` into a Settings object, not `os.environ`), pass `api_key=` and `project=` explicitly — a bare call warns and installs a no-op (or pass `strict=True` to fail-fast).
 
 **Next.js:** `KeletExporter` in `instrumentation.ts` via `@vercel/otel`. Two silent-if-omitted configs — see stack-notes.md.
 **React:** `KeletProvider` at root. `VoteFeedback` / `useFeedbackState` / `useKeletSignal` for feedback.
