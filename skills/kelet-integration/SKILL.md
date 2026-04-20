@@ -12,7 +12,7 @@ license: CC-BY-4.0
 metadata:
   author: kelet-ai
   url: https://kelet.ai
-  version: "1.5.5"
+  version: "1.5.6"
 allowed-tools: Read Write Edit Glob Grep Bash AskUserQuestion ExitPlanMode WebFetch(https://docs-ai.kelet.ai) WebFetch(https://kelet.ai)
 ---
 
