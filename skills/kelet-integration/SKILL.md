@@ -97,6 +97,7 @@ Read silently — no questions yet. Cover:
 4. **Session tracking** — conversation IDs, request IDs, Redis keys, DB columns. Evaluate semantics: does the candidate ID change at reset/new-conversation? If not, surface the mismatch. See [references/implementation.md](references/implementation.md).
 5. **Existing feedback UI** — thumbs, ratings, edits, retries, copy buttons. Wire to these; don't replace.
 6. **Deployment infra** — scan before asking: `helm/`, `charts/`, `.github/workflows/`, `vercel.json`, `railway.json`, `render.yaml`, `fly.toml`, `docker-compose.yml`, `Procfile`, `*.tf`, `template.yaml`
+7. **Multi-env deploys** — any sign the app ships to more than one environment (per-env overlays, values, manifests, config, `.env.*`): flag for Checkpoint 1.
 
 Skip styling, auth, unrelated business logic. Flag other repos/services in the agentic flow — developer should run this skill there too.
 
@@ -125,6 +126,8 @@ Present diagram + project map + integration mode + brief workflow summary (steps
 
 If session semantics are genuinely ambiguous — include it in this question, don't burn a separate slot.
 
+If multi-env deploys were detected, also ask whether to use one Kelet project across envs or one per env — per-env keeps non-prod noise out of prod traces; single-project is simpler.
+
 If corrections change flow count, framework, or session structure — redo the analysis pass. **Don't proceed to signal analysis until confirmed.**
 
 ---
@@ -137,19 +140,20 @@ Think like an investigator planting clues: *if something goes wrong later, what 
 
 **The one filter:** Can Kelet derive this clue from the session trace? → synthetic (zero code). Requires a human action or external event? → coded signal.
 
+**Reason per signal — what clue does it drop?** For each proposal, answer one question: when a developer looks back at the traces and something's off, what would *this* signal reveal that the trace alone wouldn't? If you can't name the diagnostic question it answers, it's noise — drop it. [references/signals.md](references/signals.md) presets are prompts for that reasoning, not a list to copy; if your reasoning surfaces something not in the table, propose it anyway.
+
 **Synthetic (platform, no customer code):**
 
-Pick evaluators that capture meaningful quality signals for this specific use case. Anchor: Task Completion. Add 1–2 that reflect what "good" and "bad" look like for this app. ONE evaluator per dimension — duplicating a dimension multiplies noise. See [references/signals.md](references/signals.md) for preset list.
+Anchor: Task Completion. Add 1–2 that reflect what "good" and "bad" look like for this app. ONE evaluator per dimension — duplicating dimensions multiplies noise.
 
-**Coded — frontend (lightweight: 0–2 max):**
+**Coded (lightweight: 0–2 max):**
 
-Almost always frontend — human reacting to AI output. Server-side only if consumer is another system or feedback arrives via an endpoint (e.g. `/approve`).
+Almost always user-facing — human reacting to AI output. Server-side only if the consumer is another system or feedback arrives via an endpoint (e.g. `/approve`).
 
-- Vote → `VoteFeedback`, edits → `useFeedbackState`, behavioral events → `useKeletSignal`
 - `kind`: `FEEDBACK` · `EDIT` · `EVENT` · `METRIC` · `ARBITRARY` — `source`: `HUMAN` · `LABEL` · `SYNTHETIC`
-- **React UI scan:** Edit inputs on AI output → `useFeedbackState`; copy-to-clipboard, retry, session reset → `useKeletSignal`. Copy is always worth proposing for apps that render AI text — even if no button exists yet, it's a natural affordance and a strong implicit signal. Propose 1–2 max.
-
-**Coded — server-side:** only if no browser UI or feedback is endpoint-driven.
+- Stack maps implementation, not which signals to emit: React → `@kelet-ai/feedback-ui` (`VoteFeedback`, `useFeedbackState`, `useKeletSignal`); other frontends → TS SDK `signal()` from event handlers; server → Python/TS SDK from the handler.
+- **Behaviours worth capturing** (pick what answers a real diagnostic question for THIS app): vote, edit-on-AI-output, copy, retry, session reset, abandon, rephrase. Copy is usually worth proposing for anything that renders AI text.
+- **Reason about expression, not keywords.** Rephrase ≠ prefix match. Users rephrase via clarification, negation, frustration, and — most valuable — implicit rephrase (same topic, different wording, short window, no keyword). Same applies to abandon, retry, etc.
 
 Prepare for Checkpoint 2: signal proposals + project name suggestion + "what you'll see" preview.
 

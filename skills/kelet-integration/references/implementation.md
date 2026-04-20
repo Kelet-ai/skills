@@ -57,3 +57,13 @@ Feedback signals?
 4. **Instrument frontend** — `KeletProvider` at root, nested per flow if multi-project
 5. **Connect feedback** — VoteFeedback + session ID propagation if user-facing
 6. **Verify** — type check, confirm env vars set, open Kelet console and confirm traces appear
+
+## Wrap decision
+
+Is this call site a user-facing conversational turn? → wrap in `agentic_session()`. Tooling / health / internal / curl-debuggable one-shots (e.g. admin endpoints, `/healthz`) → don't wrap; the server auto-groups unwrapped calls. Redundant wraps aren't harmful but signal pattern-matching instead of reasoning.
+
+When a handler emits a signal and runs the agent, open `agentic_session()` once around both. Nested wraps with the same `session_id` dedupe correctly but render as two units in the trace tree — readability only, not correctness.
+
+## Shutdown (long-running servers)
+
+Call `kelet.shutdown()` (Python) / `shutdown()` (TS) explicitly in teardown (FastAPI lifespan `finally`, Django SIGTERM handler, Celery `worker_shutdown`, Node service teardown). Auto hooks (atexit / `beforeExit`+SIGINT+SIGTERM) cover clean exits but are bypassed by SIGKILL, `os._exit`, short K8s `terminationGracePeriodSeconds`, and `process.exit(N)`. Spans from the last seconds of traffic drop silently without it. Scripts and one-shots can rely on the auto hooks.
