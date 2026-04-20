@@ -70,8 +70,8 @@ Use `KeletExporter` in `instrumentation.ts` via `@vercel/otel`:
 - `useFeedbackState<T>(initialState, session_id, options?)` — drop-in for `useState`; tracks edits automatically. Second
   arg to each `setState` call sets trigger name: `setState(value, "ai_generation")` vs `setState(value, "manual_edit")`
 - `useKeletSignal()` — returns a `sendSignal(params)` function for sending signals directly from React event handlers.
-  Use for coded signals (abandon, copy, accept, rephrase) that aren't tied to component state. Must be called inside
-  a `KeletProvider`.
+  Use for coded signals (abandon, copy, accept) tied to an explicit trigger — never for rephrase (always LLM synthetic;
+  see SKILL.md). Must be called inside a `KeletProvider`.
   params: `{ session_id, kind, source, trigger_name?, score?, value?, metadata? }`
   Example:
   `const sendSignal = useKeletSignal(); sendSignal({ session_id, kind: 'FEEDBACK', source: 'HUMAN', trigger_name: 'user-abandon', score: 0.0 });`

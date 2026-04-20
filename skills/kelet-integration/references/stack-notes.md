@@ -127,5 +127,5 @@ AI-generated updates `"ai_generation"` and user edits `"manual_refinement"`. Wit
 look identical and Kelet can't distinguish "user accepted AI output" from "user corrected it."
 
 **`useKeletSignal()`**: returns a `sendSignal(params)` function for sending signals directly from React event
-handlers — abandon, rephrase, accept, copy. Must be inside `KeletProvider`. Preferred over a backend endpoint for
-browser-observable events (no round-trip needed).
+handlers — abandon, accept, copy (explicit-trigger only; rephrase belongs to the LLM synthetic layer, not here).
+Must be inside `KeletProvider`. Preferred over a backend endpoint for browser-observable events (no round-trip needed).
