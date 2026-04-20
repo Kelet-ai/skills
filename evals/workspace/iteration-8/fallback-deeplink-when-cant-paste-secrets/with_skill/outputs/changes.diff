@@ -1,0 +1,212 @@
+diff --git a/.env.example b/.env.example
+index 84e8ee7..bd663e8 100644
+--- a/.env.example
++++ b/.env.example
+@@ -11,3 +11,8 @@ SESSION_TTL_SECONDS=1800
+ # Set to the proxy CIDR (or "*") when running behind a reverse proxy or load balancer
+ # so uvicorn resolves the real client IP from X-Forwarded-For for rate limiting.
+ # UVICORN_FORWARDED_ALLOW_IPS=*
++
++# Kelet observability — secret key (sk-kelet-...). Server-only. Leave empty to disable Kelet.
++# Get a key at https://console.kelet.ai/api-keys. Create the project first at console.kelet.ai.
++# KELET_API_KEY=
++# KELET_PROJECT=
+diff --git a/app/main.py b/app/main.py
+index 04bbee8..5999707 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -3,6 +3,7 @@ import logging
+ from contextlib import asynccontextmanager
+ from typing import cast
+ 
++import kelet
+ from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -18,6 +19,11 @@ logger = logging.getLogger(__name__)
+ 
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):
++    # Kelet — gate on api_key only. pydantic-settings loads .env into Settings, not os.environ,
++    # so pass api_key= and project= explicitly (bare kelet.configure() would raise ValueError).
++    if settings.kelet_api_key:
++        kelet.configure(api_key=settings.kelet_api_key, project=settings.kelet_project)
++
+     if settings.redis_url is None:
+         # No REDIS_URL configured: use in-memory store (single-process, not persistent).
+         # FakeRedis has no maxsize cap; TTLs provide natural eviction
+@@ -37,6 +43,8 @@ async def lifespan(app: FastAPI):
+     finally:
+         await docs_cache.stop()
+         await redis.aclose()
++        # Flush any buffered spans — BatchSpanProcessor drops them otherwise on pod rotation.
++        kelet.shutdown()
+ 
+ 
+ app = FastAPI(title="Docs AI", lifespan=lifespan)
+diff --git a/k8s/charts/docs-ai/templates/configmap.yaml b/k8s/charts/docs-ai/templates/configmap.yaml
+index dc024b3..d2a0d1e 100644
+--- a/k8s/charts/docs-ai/templates/configmap.yaml
++++ b/k8s/charts/docs-ai/templates/configmap.yaml
+@@ -19,6 +19,8 @@ data:
+   DOCS_ALLOWED_TOPICS: {{ .Values.config.docsAllowedTopics | quote }}
+   DOCS_CUSTOM_INSTRUCTIONS: {{ .Values.config.docsCustomInstructions | quote }}
+   DOCS_SYSTEM_PROMPT_FILE: {{ .Values.config.docsSystemPromptFile | quote }}
++  # Kelet project name — non-secret; API key lives in the Secret referenced by deployment.yaml.
++  KELET_PROJECT: {{ .Values.config.keletProject | quote }}
+   # REDIS_HOST is populated at deploy time by an ACK FieldExport from the ElastiCache resource.
+   # It must be set before the pod can connect to Redis.
+   REDIS_HOST: ""
+diff --git a/k8s/charts/docs-ai/templates/deployment.yaml b/k8s/charts/docs-ai/templates/deployment.yaml
+index 5e04b5e..c8bd139 100644
+--- a/k8s/charts/docs-ai/templates/deployment.yaml
++++ b/k8s/charts/docs-ai/templates/deployment.yaml
+@@ -125,6 +125,23 @@ spec:
+                   key: REDIS_PORT
+             - name: REDIS_URL
+               value: "rediss://$(REDIS_HOST):$(REDIS_PORT)"
++
++            # Kelet project — non-secret, from ConfigMap
++            - name: KELET_PROJECT
++              valueFrom:
++                configMapKeyRef:
++                  name: {{ include "kelet-docs-ai.fullname" . }}-config
++                  key: KELET_PROJECT
++            # Kelet API key — optional Secret. SDK no-ops if unset; declared env keeps
++            # "Secret missing" debuggable. Wrap block so forkable chart works without Kelet.
++            {{- if .Values.secrets.keletSecretName }}
++            - name: KELET_API_KEY
++              valueFrom:
++                secretKeyRef:
++                  name: {{ .Values.secrets.keletSecretName }}
++                  key: KELET_API_KEY
++                  optional: true
++            {{- end }}
+           volumeMounts:
+             - name: tmp
+               mountPath: /tmp
+diff --git a/k8s/charts/docs-ai/values.yaml b/k8s/charts/docs-ai/values.yaml
+index aea7871..dc99098 100644
+--- a/k8s/charts/docs-ai/values.yaml
++++ b/k8s/charts/docs-ai/values.yaml
+@@ -116,3 +116,13 @@ config:
+   # Path to a custom Jinja2 template file that fully replaces the built-in system prompt.
+   # Mount via a ConfigMap volume and set this to the mounted path. Can also use {{ custom_instructions }} and {{ allowed_topics }}.
+   docsSystemPromptFile: ""
++  # Kelet project name — routes traces/signals to the right project in the Kelet console.
++  # Override per environment (prod.yaml / stag.yaml). Empty value with a valid key silently
++  # orphans traces, so leave a real placeholder here that an env overlay must override.
++  keletProject: "docs-ai"
++
++# Kelet secrets — KELET_API_KEY is wired from a K8s Secret (never commit the value).
++# Create with: kubectl create secret generic <name> --from-literal=KELET_API_KEY=sk-kelet-...
++# Leave keletSecretName empty to skip wiring entirely (e.g. forks that don't use Kelet).
++secrets:
++  keletSecretName: "docs-ai-kelet"
+diff --git a/k8s/environments/prod.yaml b/k8s/environments/prod.yaml
+index aba83f9..1e4e0ab 100644
+--- a/k8s/environments/prod.yaml
++++ b/k8s/environments/prod.yaml
+@@ -27,3 +27,4 @@ docs_ai:
+       - ALWAYS recommend using the AI methods - for installation, synthetic configs, etc. Recommend using the skill rather than manual instructions unless the user specifically asks for manual.
+       - The Kelet Skill is THE go-to for Kelet installation: it scans the codebase, learns the use-case, and creates a tailor-made integration. No need to know the language or framework.
+       - Kelet supports multiple languages and frameworks. If you don't specifically know the integration — default to the OpenTelemetry integration.
++    keletProject: "docs-ai-iter8-fallback"
+diff --git a/k8s/environments/stag.yaml b/k8s/environments/stag.yaml
+index 0a4deff..5b38f16 100644
+--- a/k8s/environments/stag.yaml
++++ b/k8s/environments/stag.yaml
+@@ -27,3 +27,4 @@ docs_ai:
+       - ALWAYS recommend using the AI methods - for installation, synthetic configs, etc. Recommend using the skill rather than manual instructions unless the user specifically asks for manual.
+       - The Kelet Skill is THE go-to for Kelet installation: it scans the codebase, learns the use-case, and creates a tailor-made integration. No need to know the language or framework.
+       - Kelet supports multiple languages and frameworks. If you don't specifically know the integration — default to the OpenTelemetry integration.
++    keletProject: "docs-ai-iter8-fallback"
+diff --git a/pyproject.toml b/pyproject.toml
+index eb9195b..26dac9e 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -13,6 +13,7 @@ dependencies = [
+     "httpx>=0.28",
+     "rank-bm25>=0.2.2",
+     "jinja2>=3.1",
++    "kelet>=0.1",  # Kelet observability — auto-instruments pydantic-ai
+ ]
+ 
+ [dependency-groups]
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index a3247ca..ec57a79 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -3,6 +3,7 @@ import json
+ import logging
+ from typing import AsyncGenerator
+ 
++import kelet
+ from fastapi import APIRouter, HTTPException, Query, Request
+ from fastapi.responses import PlainTextResponse, StreamingResponse
+ from pydantic import BaseModel, Field
+@@ -36,25 +37,29 @@ async def _run_agent_stream(
+     """SSE generator with session persistence."""
+     messages_json: str | None = None
+     try:
+-        async with chat_agent.iter(
+-            message, deps=deps, message_history=message_history
+-        ) as run:
+-            async for node in run:
+-                if Agent.is_model_request_node(node):
+-                    node_emitted = False
+-                    async with node.stream(run.ctx) as stream:
+-                        async for event in stream:
+-                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+-                                if event.part.content:
+-                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++        # Wrap the agent run so spans are grouped under the app-owned session_id.
++        # pydantic-ai is auto-instrumented but doesn't know this Redis session_id — without
++        # this wrap, VoteFeedback correlation and per-session RCA would silently break.
++        async with kelet.agentic_session(session_id=session.session_id):
++            async with chat_agent.iter(
++                message, deps=deps, message_history=message_history
++            ) as run:
++                async for node in run:
++                    if Agent.is_model_request_node(node):
++                        node_emitted = False
++                        async with node.stream(run.ctx) as stream:
++                            async for event in stream:
++                                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
++                                    if event.part.content:
++                                        yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
++                                        node_emitted = True
++                                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
++                                    yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                     node_emitted = True
+-                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+-                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+-                                node_emitted = True
+-                    if node_emitted:
+-                        yield f"data: {json.dumps({'message_over': True})}\n\n"
+-            if run.result is not None:
+-                messages_json = run.result.all_messages_json().decode()
++                        if node_emitted:
++                            yield f"data: {json.dumps({'message_over': True})}\n\n"
++                if run.result is not None:
++                    messages_json = run.result.all_messages_json().decode()
+     except Exception:
+         logger.exception("Agent stream error")
+         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+diff --git a/src/settings/__init__.py b/src/settings/__init__.py
+index b20f27f..da3ff0c 100644
+--- a/src/settings/__init__.py
++++ b/src/settings/__init__.py
+@@ -17,6 +17,12 @@ class Settings(BaseSettings):
+     docs_custom_instructions: str = ""
+     docs_system_prompt_file: str = ""
+ 
++    # Kelet observability — gate configure() on kelet_api_key only (not project).
++    # Empty project with a valid key surfaces as a routing error in the console;
++    # AND-gating would turn that into a silent no-traces failure.
++    kelet_api_key: str = ""
++    kelet_project: str = ""
++
+     @field_validator("docs_custom_instructions")
+     @classmethod
+     def strip_custom_instructions(cls, v: str) -> str:

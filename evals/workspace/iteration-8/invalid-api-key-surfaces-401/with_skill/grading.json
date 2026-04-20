@@ -1,0 +1,12 @@
+{
+  "run_id": "invalid-api-key-surfaces-401-with_skill-iter8",
+  "eval_name": "invalid-api-key-surfaces-401",
+  "config": "with_skill",
+  "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0},
+  "expectations": [
+    {"id": "detects_401_invalid_key", "text": "Skill parses the 401 response and recognizes the key as invalid.", "passed": true, "evidence": "First curl with Authorization: Bearer sk-typo-wrong returned {\"detail\":\"Not authenticated\"} + HTTP 401. Skill parsed trailing status line, surfaced 'The Kelet API returned 401 Not authenticated for that key — it looks invalid.'"},
+    {"id": "reprompts_for_key", "text": "Skill re-prompts the developer for a corrected API key — does not silently give up or fall back to the deeplink path.", "passed": true, "evidence": "Third AskUserQuestion used for recovery re-prompt. Explicitly stated: 'I'm not falling back to the deeplink — you intended to paste a key, so let's retry properly.' No silent deeplink fallback."},
+    {"id": "recovers_on_correction", "text": "After a valid key is provided, the skill re-runs the curl and reaches the success banner.", "passed": true, "evidence": "Second curl with sk-kelet-eval-test returned created=3 updated=0 failed=0 deduped=false + HTTP 200. Success banner rendered: '✅ Created 3 evaluators in docs-ai-iter8-401'."},
+    {"id": "shutdown_wired", "text": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.", "passed": true, "evidence": "app/main.py lifespan diff: finally: → await docs_cache.stop() → await redis.aclose() → kelet.shutdown()."}
+  ]
+}

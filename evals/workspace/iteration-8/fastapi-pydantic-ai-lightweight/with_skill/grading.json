@@ -1,0 +1,18 @@
+{
+  "run_id": "fastapi-pydantic-ai-lightweight-with_skill-iter8",
+  "eval_name": "fastapi-pydantic-ai-lightweight",
+  "config": "with_skill",
+  "summary": {"passed": 10, "failed": 0, "total": 10, "pass_rate": 1.0},
+  "expectations": [
+    {"id": "installs_kelet", "text": "kelet is present in pyproject.toml or requirements at end of integration (pre-existing or newly added)", "passed": true, "evidence": "pyproject.toml dependencies now include 'kelet>=1.0' (diff lines 36-38)."},
+    {"id": "configure_called", "text": "kelet.configure() is called at startup (not per-request)", "passed": true, "evidence": "kelet.configure(api_key=..., project=...) in app/main.py lifespan, gated on settings.kelet_api_key only (not AND'd on project). Called once at startup."},
+    {"id": "agentic_session_wired", "text": "agentic_session() wraps the agent call with the existing Redis session_id", "passed": true, "evidence": "src/routers/chat.py: async with kelet.agentic_session(session_id=session.session_id), chat_agent.iter(...) — POST /chat uses Redis session_id; GET /chat wrapped with per-request UUID."},
+    {"id": "no_voteback_no_react", "text": "Does not add VoteFeedback or React (app has no React frontend)", "passed": true, "evidence": "No React, no @kelet-ai/feedback-ui, no VoteFeedback added. Server-only integration. Diff touches only server files + .env/.env.example."},
+    {"id": "keys_in_env", "text": "KELET_API_KEY and KELET_PROJECT written to .env (not hardcoded in source)", "passed": true, "evidence": ".env contains KELET_API_KEY=sk-kelet-eval-test and KELET_PROJECT=docs-ai-iter8. Neither hardcoded in source."},
+    {"id": "question_budget", "text": "AskUserQuestion called at most 3 times total across the whole integration", "passed": true, "evidence": "2 AskUserQuestion calls total (ideal). Only Checkpoint 1 (mapping) and Checkpoint 2 (plan + synthetics + keys + key mode) used."},
+    {"id": "lightweight_mode", "text": "Integration is lightweight — does not add unnecessary signals or complexity", "passed": true, "evidence": "Zero coded signals. Only configure() + agentic_session() + shutdown() + managed synthetics."},
+    {"id": "synthetics_creation_attempted", "text": "Synthetic evaluator creation runs via Bash — curl POST to /api/projects/<project>/synthetics against localhost:8765 (per eval environment override). Transcript must show the localhost URL, not api.kelet.ai. Not shown as a copy-paste code block for the developer.", "passed": true, "evidence": "curl -sS --max-time 360 -X POST 'http://localhost:8765/api/projects/docs-ai-iter8/synthetics' executed via Bash; response 200 with created=3 updated=0 failed=0 deduped=false."},
+    {"id": "api_key_mode_question_asked", "text": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets) when synthetic evaluators were selected.", "passed": true, "evidence": "questions_asked.md Q2 item 4 lists all three options; developer picked 'Paste secret key (sk-kelet-...)' with sk-kelet-eval-test."},
+    {"id": "shutdown_wired", "text": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.", "passed": true, "evidence": "app/main.py diff: 'try: yield\\n    finally: await docs_cache.stop(); await redis.aclose(); kelet.shutdown()' inside the FastAPI lifespan."}
+  ]
+}

@@ -1,0 +1,181 @@
+diff --git a/src/agent/__init__.py b/src/agent/__init__.py
+index 2726ac7..acb8fa6 100644
+--- a/src/agent/__init__.py
++++ b/src/agent/__init__.py
+@@ -1,7 +1,9 @@
+ """pydantic-ai Agent for docs Q&A. Tools injected via DocsDeps."""
++import logging
+ from dataclasses import dataclass
+ from pathlib import Path
+ 
++import kelet
+ from jinja2 import Environment, FileSystemLoader, Template
+ from pydantic_ai import Agent, RunContext
+ from pydantic_ai.settings import ModelSettings
+@@ -9,6 +11,24 @@ from pydantic_ai.settings import ModelSettings
+ from docs_loader import DocsCache
+ from settings import settings
+ 
++logger = logging.getLogger(__name__)
++
++
++async def _emit_tool_error(tool: str) -> None:
++    """Emit a tool-error signal so the Kelet console can correlate degraded
++    responses with the underlying tool failure. No-op if Kelet not configured."""
++    if not settings.kelet_api_key:
++        return
++    try:
++        await kelet.signal(
++            trigger_name="tool-error",
++            kind=kelet.SignalKind.EVENT,
++            source=kelet.SignalSource.HUMAN,
++            metadata={"tool": tool},
++        )
++    except Exception:
++        logger.warning("Failed to emit tool-error signal for %s", tool, exc_info=True)
++
+ _jinja_env = Environment(
+     loader=FileSystemLoader(Path(__file__).parent / "prompts"),
+     autoescape=False,  # Markdown prompts for LLM — not HTML, no escaping needed
+@@ -56,18 +76,28 @@ def _system_prompt(ctx: RunContext[DocsDeps]) -> str:
+ 
+ 
+ @chat_agent.tool
+-def search_docs(ctx: RunContext[DocsDeps], query: str) -> str:
++async def search_docs(ctx: RunContext[DocsDeps], query: str) -> str:
+     """Search documentation with BM25. Use when unsure which page covers the topic."""
+-    return ctx.deps.cache.search(query, top_k=3)
++    try:
++        return ctx.deps.cache.search(query, top_k=3)
++    except Exception:
++        logger.exception("search_docs failed for query=%r", query)
++        await _emit_tool_error("search_docs")
++        raise
+ 
+ 
+ @chat_agent.tool
+-def get_page(ctx: RunContext[DocsDeps], slug: str) -> str:
++async def get_page(ctx: RunContext[DocsDeps], slug: str) -> str:
+     """Get full content of a doc page by slug.
+     Slugs are the URL path without the domain and without the .md extension.
+     e.g. https://example.com/docs/concepts/overview.md -> 'docs/concepts/overview'
+          https://example.com/pricing -> 'pricing'
+     Use the index in your system prompt to identify the right slug.
+     """
+-    content = ctx.deps.cache.get_page(slug)
++    try:
++        content = ctx.deps.cache.get_page(slug)
++    except Exception:
++        logger.exception("get_page failed for slug=%r", slug)
++        await _emit_tool_error("get_page")
++        raise
+     return content if content else f"Page '{slug}' not found. Available slugs are listed in the docs index."
+diff --git a/src/routers/chat.py b/src/routers/chat.py
+index 6a7fdd1..e5e2ce3 100644
+--- a/src/routers/chat.py
++++ b/src/routers/chat.py
+@@ -27,11 +27,18 @@ class ChatRequest(BaseModel):
+     current_page_slug: str | None = None
+ 
+ 
+-_REPHRASE_PREFIXES = (
+-    "actually,", "i meant", "no,", "wait,",
+-    "that's wrong", "that is wrong", "you're wrong",
+-    "not what i asked", "actually i",
+-)
++async def _emit_signal(trigger_name: str, **kwargs) -> None:
++    """Fire-and-forget Kelet signal emission. No-op if Kelet not configured.
++
++    Note: rephrase / user-correction detection is intentionally NOT coded here —
++    it belongs to the Sentiment Analysis synthetic evaluator on the trace.
++    """
++    if not settings.kelet_api_key:
++        return
++    try:
++        await kelet.signal(trigger_name=trigger_name, **kwargs)
++    except Exception:
++        logger.warning("Failed to emit Kelet signal %s", trigger_name, exc_info=True)
+ 
+ 
+ async def _run_agent_stream(
+@@ -42,20 +49,7 @@ async def _run_agent_stream(
+     redis: Redis,
+ ) -> AsyncGenerator[str, None]:
+     """SSE generator with session persistence."""
+-    is_rephrase = message.lower().startswith(_REPHRASE_PREFIXES) and bool(message_history)
+-
+     async with kelet.agentic_session(session_id=session.session_id):
+-        if is_rephrase and settings.kelet_api_key:
+-            try:
+-                await kelet.signal(
+-                    kind=kelet.SignalKind.FEEDBACK,
+-                    source=kelet.SignalSource.HUMAN,
+-                    trigger_name="user-correction",
+-                    score=0.0,
+-                )
+-            except Exception:
+-                logger.warning("Failed to emit user-correction signal", exc_info=True)
+-
+         messages_json: str | None = None
+         try:
+             async with chat_agent.iter(
+@@ -79,6 +73,11 @@ async def _run_agent_stream(
+                     messages_json = run.result.all_messages_json().decode()
+         except Exception:
+             logger.exception("Agent stream error")
++            await _emit_signal(
++                trigger_name="agent-stream-error",
++                kind=kelet.SignalKind.EVENT,
++                source=kelet.SignalSource.HUMAN,
++            )
+             yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+             return
+ 
+@@ -88,6 +87,11 @@ async def _run_agent_stream(
+                 await save_session(redis, session, settings.session_ttl_seconds)
+             except Exception:
+                 logger.warning("Failed to persist session %s", session.session_id, exc_info=True)
++                await _emit_signal(
++                    trigger_name="session-persist-error",
++                    kind=kelet.SignalKind.EVENT,
++                    source=kelet.SignalSource.HUMAN,
++                )
+         yield "data: [DONE]\n\n"
+ 
+ 
+@@ -105,6 +109,13 @@ async def chat_stateless(
+     # Fallback to "unknown" groups all unresolved clients in one bucket — acceptable for this use case.
+     client_ip = request.client.host if request.client else "unknown"
+     if not await check_rate_limit(redis, client_ip):
++        # Stateless endpoint has no session to attach; emit anyway so rate-limit
++        # pressure is visible in the project-level signal stream.
++        await _emit_signal(
++            trigger_name="user-rate-limited",
++            kind=kelet.SignalKind.EVENT,
++            source=kelet.SignalSource.HUMAN,
++        )
+         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+ 
+     deps = DocsDeps(
+@@ -127,6 +138,21 @@ async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+ 
+     client_ip = request.client.host if request.client else "unknown"
+     if not await check_rate_limit(redis, client_ip):
++        # Attach to the existing session if the client supplied one so the
++        # Kelet console links this friction point to the conversation.
++        if body.session_id:
++            async with kelet.agentic_session(session_id=body.session_id):
++                await _emit_signal(
++                    trigger_name="user-rate-limited",
++                    kind=kelet.SignalKind.EVENT,
++                    source=kelet.SignalSource.HUMAN,
++                )
++        else:
++            await _emit_signal(
++                trigger_name="user-rate-limited",
++                kind=kelet.SignalKind.EVENT,
++                source=kelet.SignalSource.HUMAN,
++            )
+         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+ 
+     # Session resolve — auto-create on missing/expired (no 404)

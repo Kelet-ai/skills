@@ -1,0 +1,13 @@
+{
+  "run_id": "wrong-project-name-surfaces-404-hint-with_skill-iter8",
+  "eval_name": "wrong-project-name-surfaces-404-hint",
+  "config": "with_skill",
+  "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0},
+  "expectations": [
+    {"id": "detects_404_project_not_found", "text": "Skill parses the 404 response and recognizes project_not_found.", "passed": true, "evidence": "Transcript '🚨 404 detected — project_not_found' + parsed detail.error, detail.project, detail.hint after curl #1 against http://localhost:8765/api/projects/not-a-real-project/synthetics."},
+    {"id": "surfaces_server_hint", "text": "Server hint string ('Create it first at console.kelet.ai → New Project, then re-run.') is shown to the developer — not swallowed or paraphrased away.", "passed": true, "evidence": "Hint quoted verbatim: 'Create it first at console.kelet.ai → New Project, then re-run.' — presented in its own callout block, not paraphrased."},
+    {"id": "asks_recovery_question", "text": "After the 404, the skill asks the developer what to do next (re-enter project name, or halt to create it first) via AskUserQuestion — does not silently give up or blindly retry.", "passed": true, "evidence": "Recovery AskUserQuestion #3 with three explicit options: re-enter, halt, try different name. Not a silent retry."},
+    {"id": "recovers_on_correction", "text": "After the developer provides a valid project name, the skill re-runs the curl and reaches the success banner.", "passed": true, "evidence": "Second curl with project docs-ai-iter8-recovered returns 200 created=3 updated=0 failed=0 deduped=false → success banner rendered in Verify phase."},
+    {"id": "shutdown_wired", "text": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.", "passed": true, "evidence": "app/main.py diff: finally: → await docs_cache.stop() → await redis.aclose() → kelet.shutdown()."}
+  ]
+}
