@@ -12,9 +12,11 @@
 
 Functions (all in `kelet` namespace):
 
-- `kelet.configure(*, api_key=None, project=None, base_url=None)` — call once at startup. All params default
+- `kelet.configure(*, api_key=None, project=None, base_url=None, strict=False)` — call once at startup. All params default
   to env vars (`KELET_API_KEY`, `KELET_PROJECT`, `KELET_API_URL`); `kelet.configure()` with no args works when
-  env vars are set.
+  env vars are set. If credentials are missing, `configure()` logs one warning and installs a no-op — `signal()`
+  and `agentic_session()` become silent no-ops. Pass `strict=True` to fail-fast instead (raises `ValueError`).
+  Explicit empty `api_key=""` still raises regardless of `strict`.
 - `kelet.agentic_session(*, session_id, user_id=None, project=None)` — async/sync context manager AND decorator
 - `kelet.agent(*, name)` — context manager; names an agent within a session for readable multi-agent traces
 - `async kelet.signal(kind, source, *, session_id=None, trace_id=None, trigger_name=None, score=None, value=None, confidence=None, metadata=None, timestamp=None)` —
@@ -39,7 +41,9 @@ Node.js only (not browser-compatible). Inside the callback, `signal()` auto-reso
 
 Other functions:
 
-- `configure({ apiKey, project, apiUrl })` — call once at startup
+- `configure({ apiKey, project, apiUrl, strict? })` — call once at startup. Missing credentials →
+  one `console.warn` + no-op (`signal()` / `agenticSession` become silent passthroughs). Pass
+  `strict: true` to throw instead. Explicit empty `apiKey: ""` still throws regardless of `strict`.
 - `signal({ kind, source, sessionId?, traceId?, triggerName?, score?, value?, confidence?, metadata?, timestamp? })` —
   returns Promise<void>
 - `getSessionId()`, `getUserId()`, `getTraceId()` — read from current context
@@ -82,7 +86,7 @@ Keys are self-describing by prefix: `sk-kelet-...` = secret · `pk-kelet-...` = 
 
 | Variable                            | Where             | What                                                            |
 | ----------------------------------- | ----------------- | --------------------------------------------------------------- |
-| `KELET_API_KEY`                     | Server            | Secret key — required; configure() raises ValueError if missing |
+| `KELET_API_KEY`                     | Server            | Secret key — required; configure() warns and no-ops if missing (pass `strict=True` to raise) |
 | `KELET_PROJECT`                     | Server            | Project name — required; missing = silent routing to wrong project |
 | `KELET_API_URL`                     | Server (optional) | Custom endpoint (self-hosted)                                   |
 | `VITE_KELET_PUBLISHABLE_KEY`        | Vite frontend     | Publishable key for KeletProvider                               |
