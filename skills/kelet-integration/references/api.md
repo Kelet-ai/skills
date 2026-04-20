@@ -18,7 +18,7 @@ Functions (all in `kelet` namespace):
 - `kelet.agentic_session(*, session_id, user_id=None, project=None)` — async/sync context manager AND decorator
 - `kelet.agent(*, name)` — context manager; names an agent within a session for readable multi-agent traces
 - `async kelet.signal(kind, source, *, session_id=None, trace_id=None, trigger_name=None, score=None, value=None, confidence=None, metadata=None, timestamp=None)` —
-  submit a signal; auto-resolves session from context. Best-effort: HTTP/transport errors retried then logged, no raise. Raises `ValueError` only on (a) no session/trace context available, or (b) `score`/`confidence` outside [0,1]. A try/except around `signal()` is usually unnecessary.
+  submit a signal; auto-resolves session from context. Best-effort: transport errors logged, not raised. Raises `ValueError` only on missing session/trace context or `score`/`confidence` outside [0,1]. No try/except needed.
 
 - `kelet.get_session_id()` — get current session ID from context
 - `kelet.create_kelet_processor()` — for manual OTEL setup (e.g.

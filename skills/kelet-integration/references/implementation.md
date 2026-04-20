@@ -60,15 +60,13 @@ Feedback signals?
 
 ## Wrap decision
 
-Is this call site a user-facing conversational turn? → wrap in `agentic_session()`. Tooling / health / internal / curl-debuggable one-shots (e.g. admin endpoints, `/healthz`) → don't wrap; the server auto-groups unwrapped calls. Redundant wraps aren't harmful but signal pattern-matching instead of reasoning.
+User-facing conversational turn → wrap in `agentic_session()`. Tooling / health / one-shot (admin, `/healthz`, curl RAG lookups) → don't; server auto-groups unwrapped calls.
 
-When a handler emits a signal and runs the agent, open `agentic_session()` once around both. Nested wraps with the same `session_id` dedupe correctly but render as two units in the trace tree — readability only, not correctness.
+Signal + agent run in the same handler → one wrap around both. Nested wraps dedupe but render as two units.
 
 ## Shutdown (long-running servers)
 
-Call `kelet.shutdown()` (Python) / `shutdown()` (TS) explicitly in teardown. Auto hooks differ between SDKs and both have gaps.
+Call `shutdown()` explicitly in teardown or spans from the final seconds drop.
 
-- **Python**: `atexit` covers clean exits; bypassed by SIGKILL, `os._exit`, short K8s `terminationGracePeriodSeconds`. Call in FastAPI lifespan `finally`, Django SIGTERM handler, Celery `worker_shutdown`.
-- **TS**: only `beforeExit` is auto-registered — SIGINT/SIGTERM are NOT (attaching listeners would override the host app's graceful shutdown). Install your own signal handler that awaits `shutdown()` before `process.exit(N)`. Without it, K8s pod evictions drop the last seconds of spans.
-
-Scripts and one-shots can rely on the auto hooks.
+- **Python**: auto `atexit`; call in FastAPI lifespan `finally` / Django SIGTERM / Celery `worker_shutdown`.
+- **TS**: auto `beforeExit` only — SIGINT/SIGTERM are not auto-handled (would override host's graceful shutdown). Install your own handler that awaits `shutdown()` before `process.exit(N)`.

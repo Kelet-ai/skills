@@ -140,20 +140,16 @@ Think like an investigator planting clues: *if something goes wrong later, what 
 
 **The one filter:** Can Kelet derive this clue from the session trace? → synthetic (zero code). Requires a human action or external event? → coded signal.
 
-**Reason per signal — what clue does it drop?** For each proposal, answer one question: when a developer looks back at the traces and something's off, what would *this* signal reveal that the trace alone wouldn't? If you can't name the diagnostic question it answers, it's noise — drop it. [references/signals.md](references/signals.md) presets are prompts for that reasoning, not a list to copy; if your reasoning surfaces something not in the table, propose it anyway.
+**What diagnostic clue does this signal drop?** If you can't name the question it answers for a developer staring at broken traces, it's noise — drop it. [references/signals.md](references/signals.md) is a prompt, not a menu.
 
-**Synthetic (platform, no customer code):**
+**Synthetic:** Anchor Task Completion, add 1–2 for this app's "good"/"bad". ONE per dimension.
 
-Anchor: Task Completion. Add 1–2 that reflect what "good" and "bad" look like for this app. ONE evaluator per dimension — duplicating dimensions multiplies noise.
-
-**Coded (lightweight: 0–2 max):**
-
-Almost always user-facing — human reacting to AI output. Server-side only if the consumer is another system or feedback arrives via an endpoint (e.g. `/approve`).
+**Coded (0–2 max):** User-facing; server-side only if consumer is a system or feedback is endpoint-driven.
 
 - `kind`: `FEEDBACK` · `EDIT` · `EVENT` · `METRIC` · `ARBITRARY` — `source`: `HUMAN` · `LABEL` · `SYNTHETIC`
-- Stack maps implementation, not which signals to emit: React → `@kelet-ai/feedback-ui` (`VoteFeedback`, `useFeedbackState`, `useKeletSignal`); other frontends → TS SDK `signal()` from event handlers; server → Python/TS SDK from the handler.
-- **Behaviours worth capturing** (pick what answers a real diagnostic question for THIS app): vote, edit-on-AI-output, copy, retry, session reset, abandon, rephrase. Copy is usually worth proposing for anything that renders AI text.
-- **Reason about expression, not keywords.** Rephrase ≠ prefix match. Users rephrase via clarification, negation, frustration, and — most valuable — implicit rephrase (same topic, different wording, short window, no keyword). Same applies to abandon, retry, etc.
+- Stack picks *how*, not *what*: React → `@kelet-ai/feedback-ui`; other frontends → TS SDK `signal()`; server → Python/TS SDK.
+- Candidates: vote, edit-on-AI-output, copy, retry, abandon, rephrase, session reset. Copy is usually worth it anywhere AI text renders.
+- **Rephrase ≠ prefix match.** Clarifications, negations, frustration, and — most valuable — implicit rephrase (same topic reworded, no keyword). Same for abandon/retry.
 
 Prepare for Checkpoint 2: signal proposals + project name suggestion + "what you'll see" preview.
 

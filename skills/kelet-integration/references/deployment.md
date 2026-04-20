@@ -4,7 +4,7 @@ Set `KELET_API_KEY` (and `NEXT_PUBLIC_KELET_PUBLISHABLE_KEY` / `VITE_KELET_PUBLI
 
 ## Before writing `.env`
 
-Read the file first. If any `KELET_*` key already has a non-empty value, show old vs. new and confirm before overwriting. A stale `KELET_PROJECT` from a prior experiment routes traces to the wrong project — silent.
+Read first. If `KELET_*` is non-empty, show old vs new and confirm — a stale `KELET_PROJECT` silently routes traces to the wrong project.
 
 ## Platforms
 
