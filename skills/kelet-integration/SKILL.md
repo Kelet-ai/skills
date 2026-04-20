@@ -22,7 +22,7 @@ allowed-tools: Read Write Edit Glob Grep Bash AskUserQuestion ExitPlanMode WebFe
 
 **North star: brilliant developer experience, fastest possible time to value.** The developer should feel like Kelet integrated itself — minimal inputs from them, maximum value immediately visible in the console.
 
-**Kelet never raises exceptions.** All SDK errors are silenced — a misconfigured integration looks identical to a working one.
+**Kelet silences runtime errors.** Config + transport failures never raise — a misconfigured integration looks identical to a working one. (Invalid caller args, e.g. out-of-range `score`, still raise `ValueError` at dev time.)
 
 **Fetch live docs before writing code:** `GET https://docs-ai.kelet.ai/chat?q=<question>` (preferred) or fetch `https://kelet.ai/docs/llms.txt` for the index.
 
