@@ -30,14 +30,14 @@ allowed-tools: Read Write Edit Glob Grep Bash AskUserQuestion ExitPlanMode WebFe
 
 ## Onboarding
 
-Open with a welcome banner. Teach these concepts before any code:
+Welcome banner: `🕵️  Welcome to Kelet — your AI detective`. Lead with the detective framing — Kelet is a reasoning agent that ingests traces + signals, clusters failures, suggests fixes. Keep the metaphor alive through the bullets:
 
-- **Trace** — automatic recording of one LLM call or tool invocation: model, inputs/outputs, latency, tokens, errors. `kelet.configure()` captures these with zero code changes.
-- **Session** — a group of traces that belong to one unit of work (one conversation, one request chain). Sessions are how Kelet correlates what happened across multiple LLM calls.
-- **Signal** — a tip you drop at a meaningful moment. Not a verdict — a pointer. Thumbs-down = _start looking here_. Edit = _close but wrong_. Abandon = _gave up_. More deliberate tips → narrower investigation → faster fix.
-- **Synthetic** — an automated signal Kelet runs on every session using the trace data it already has. No developer code needed.
-- **Project** — a logical boundary for one agentic use case. Cross-boundary trigger (e.g. support bot vs. coding assistant) = two projects. Prod vs. staging = two projects. Data from the wrong project is invisible in RCA.
-- What's ahead: silent analysis + **at most 3 `AskUserQuestion` calls (ideally 2)**
+- **Trace = the scene.** Every LLM call + tool use auto-recorded after `kelet.configure()`.
+- **Signal = the tip.** Dropped at meaningful moments (👎, edit, abandon) to point the detective at something worth investigating — not a verdict. 👎 ≠ "this session failed"; it means _start looking here_. More tips → narrower investigation → faster fix.
+- **Synthetic = the detective's forensic tools.** Automated signals from trace data alone. No code.
+- **Session = the case file.** Traces grouped by one unit of work — how events get correlated.
+- **Project = the jurisdiction.** One per agentic use case. Wrong project = invisible in RCA.
+- Next: silent analysis + **≤3 `AskUserQuestion` calls (ideally 2)**
 
 ---
 
