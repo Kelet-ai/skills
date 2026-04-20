@@ -18,6 +18,8 @@ allowed-tools: Read Write Edit Bash WebFetch(https://docs-ai.kelet.ai) WebFetch(
 
 # Kelet Integration
 
+**Enter plan mode immediately.** First action of the skill: call `EnterPlanMode` so the entire analysis → mapping → signals → plan sequence runs read-only. Only call `ExitPlanMode` after the user approves the final implementation plan at Implementation Approval.
+
 **North star: brilliant developer experience, fastest possible time to value.** The developer should feel like Kelet integrated itself — minimal inputs from them, maximum value immediately visible in the console.
 
 **Kelet never raises exceptions.** All SDK errors are silenced — a misconfigured integration looks identical to a working one.
@@ -51,7 +53,15 @@ When in doubt: lightweight. Every extra code change is a cost to the developer.
 
 ## Presentation Style
 
-Open each checkpoint with a banner (`🔍  ANALYSIS · PROJECT + WORKFLOW MAPPING`), track progress inline (`📍  Analysis ✅ → Checkpoint 1 ✅ → Signal Analysis 🔄 → Checkpoint 2 ○ → impl ○`), and close with a completion box before each question. Tone: warm + expert. Concept before mechanics.
+Open each checkpoint with a banner (`🔍  ANALYSIS · PROJECT + WORKFLOW MAPPING`) and close with a completion box before each question. Tone: warm + expert. Concept before mechanics.
+
+**Progress tracker — high-level phases only.** Use exactly these five labels, nothing else:
+
+```
+📍  Analysis 🔄 → Mapping ○ → Signals ○ → Plan ○ → Implement ○
+```
+
+Do NOT invent sub-phases (`0a`, `0b`, `Phase 0.1`, `Step 2.3`, etc.). Internal work — reading files, drafting the diagram, picking evaluators — stays silent inside the current phase. The user sees progress only when a phase flips to ✅.
 
 ---
 
@@ -61,7 +71,7 @@ Open each checkpoint with a banner (`🔍  ANALYSIS · PROJECT + WORKFLOW MAPPIN
 - **Always `AskUserQuestion`** for input — never free-form text. Use `multiSelect: true` for lists.
 - **At most 3 `AskUserQuestion` calls total (ideally 2).** If you can infer it — don't ask.
 - **Pre-flight (outside budget):** If no app description in trigger message, ask: "What does your AI app do and how do users interact with it?" before reading files.
-- **Silent analysis first.** Enter `/plan` mode only at Implementation Approval — not during Checkpoint 2.
+- **Silent analysis first.** Stay in plan mode through Checkpoints 1 and 2; only call `ExitPlanMode` at Implementation Approval.
 - **If Kelet already in deps:** skip setup, focus on what was asked. Analysis pass + Phase V still apply.
 - **Match the app's visual style.** Any UI added (VoteFeedback buttons, copy button, retry, etc.) must use the app's existing CSS classes, design tokens, and component patterns — not arbitrary inline styles or emoji defaults. Read the stylesheet and existing components before writing children.
 
@@ -149,7 +159,7 @@ Prepare for Checkpoint 2: signal proposals + project name suggestion + "what you
 
 Present signal findings + **complete lightweight plan**. Don't ask the developer to design it — propose it.
 
-**Present in normal mode — do NOT enter `/plan` mode yet.**
+**Still in plan mode — don't `ExitPlanMode` yet.**
 
 Single `AskUserQuestion` (`multiSelect: true`), structured as:
 
@@ -196,7 +206,7 @@ Only write `source=SYNTHETIC` code if developer explicitly asks AND platform can
 
 **Exception:** if deployment was flagged unknown AND secrets can't be safely handled, use question slot 3: "How do you deploy? How are secrets managed?" → follow [references/deployment.md](references/deployment.md). Skip if deployment was identified or irrelevant.
 
-Enter `/plan` mode, present full implementation plan, call `ExitPlanMode` for approval, then implement.
+Present the full implementation plan, call `ExitPlanMode` for approval, then implement.
 
 ---
 
