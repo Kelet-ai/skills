@@ -30,7 +30,7 @@ allowed-tools: Read Write Edit Glob Grep Bash AskUserQuestion ExitPlanMode WebFe
 
 ## Onboarding
 
-Welcome banner: `🕵️  Welcome to Kelet — your AI detective`. Lead with the detective framing — Kelet is a reasoning agent that ingests traces + signals, clusters failures, suggests fixes. Keep the metaphor alive through the bullets:
+**Open with a welcome banner.** Banner: `🕵️  Welcome to Kelet — your AI detective`. Lead with the detective framing — Kelet is a reasoning agent that ingests traces + signals, clusters failures, suggests fixes. Keep the metaphor alive through the bullets:
 
 - **Trace = the scene.** Every LLM call + tool use auto-recorded after `kelet.configure()`.
 - **Signal = the tip.** Dropped at meaningful moments (👎, edit, abandon) to point the detective at something worth investigating — not a verdict. 👎 ≠ "this session failed"; it means _start looking here_. More tips → narrower investigation → faster fix.
