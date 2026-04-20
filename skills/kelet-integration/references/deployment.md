@@ -2,6 +2,10 @@
 
 Set `KELET_API_KEY` (and `NEXT_PUBLIC_KELET_PUBLISHABLE_KEY` / `VITE_KELET_PUBLISHABLE_KEY` if frontend) in the platform's secret store. An unset key is a silent failure — no production traces, no error.
 
+## Before writing `.env`
+
+Read first. If `KELET_*` is non-empty, show old vs new and confirm — a stale `KELET_PROJECT` silently routes traces to the wrong project.
+
 ## Platforms
 
 - **Vercel**: Dashboard → project → **Settings → Environment Variables**. Add `KELET_API_KEY` (all environments) and publishable key if frontend.

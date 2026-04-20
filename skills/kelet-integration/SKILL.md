@@ -22,7 +22,7 @@ allowed-tools: Read Write Edit Glob Grep Bash AskUserQuestion ExitPlanMode WebFe
 
 **North star: brilliant developer experience, fastest possible time to value.** The developer should feel like Kelet integrated itself — minimal inputs from them, maximum value immediately visible in the console.
 
-**Kelet never raises exceptions.** All SDK errors are silenced — a misconfigured integration looks identical to a working one.
+**Kelet silences runtime errors.** Config + transport failures never raise — a misconfigured integration looks identical to a working one. (Invalid caller args, e.g. out-of-range `score`, still raise `ValueError` at dev time.)
 
 **Fetch live docs before writing code:** `GET https://docs-ai.kelet.ai/chat?q=<question>` (preferred) or fetch `https://kelet.ai/docs/llms.txt` for the index.
 
@@ -97,6 +97,7 @@ Read silently — no questions yet. Cover:
 4. **Session tracking** — conversation IDs, request IDs, Redis keys, DB columns. Evaluate semantics: does the candidate ID change at reset/new-conversation? If not, surface the mismatch. See [references/implementation.md](references/implementation.md).
 5. **Existing feedback UI** — thumbs, ratings, edits, retries, copy buttons. Wire to these; don't replace.
 6. **Deployment infra** — scan before asking: `helm/`, `charts/`, `.github/workflows/`, `vercel.json`, `railway.json`, `render.yaml`, `fly.toml`, `docker-compose.yml`, `Procfile`, `*.tf`, `template.yaml`
+7. **Multi-env deploys** — any sign the app ships to more than one environment (per-env overlays, values, manifests, config, `.env.*`): flag for Checkpoint 1.
 
 Skip styling, auth, unrelated business logic. Flag other repos/services in the agentic flow — developer should run this skill there too.
 
@@ -125,6 +126,8 @@ Present diagram + project map + integration mode + brief workflow summary (steps
 
 If session semantics are genuinely ambiguous — include it in this question, don't burn a separate slot.
 
+If multi-env deploys were detected, also ask whether to use one Kelet project across envs or one per env — per-env keeps non-prod noise out of prod traces; single-project is simpler.
+
 If corrections change flow count, framework, or session structure — redo the analysis pass. **Don't proceed to signal analysis until confirmed.**
 
 ---
@@ -137,19 +140,16 @@ Think like an investigator planting clues: *if something goes wrong later, what 
 
 **The one filter:** Can Kelet derive this clue from the session trace? → synthetic (zero code). Requires a human action or external event? → coded signal.
 
-**Synthetic (platform, no customer code):**
+**What diagnostic clue does this signal drop?** If you can't name the question it answers for a developer staring at broken traces, it's noise — drop it. [references/signals.md](references/signals.md) is a prompt, not a menu.
 
-Pick evaluators that capture meaningful quality signals for this specific use case. Anchor: Task Completion. Add 1–2 that reflect what "good" and "bad" look like for this app. ONE evaluator per dimension — duplicating a dimension multiplies noise. See [references/signals.md](references/signals.md) for preset list.
+**Synthetic:** Anchor Task Completion, add 1–2 for this app's "good"/"bad". ONE per dimension.
 
-**Coded — frontend (lightweight: 0–2 max):**
+**Coded (0–2 max):** User-facing; server-side only if consumer is a system or feedback is endpoint-driven.
 
-Almost always frontend — human reacting to AI output. Server-side only if consumer is another system or feedback arrives via an endpoint (e.g. `/approve`).
-
-- Vote → `VoteFeedback`, edits → `useFeedbackState`, behavioral events → `useKeletSignal`
 - `kind`: `FEEDBACK` · `EDIT` · `EVENT` · `METRIC` · `ARBITRARY` — `source`: `HUMAN` · `LABEL` · `SYNTHETIC`
-- **React UI scan:** Edit inputs on AI output → `useFeedbackState`; copy-to-clipboard, retry, session reset → `useKeletSignal`. Copy is always worth proposing for apps that render AI text — even if no button exists yet, it's a natural affordance and a strong implicit signal. Propose 1–2 max.
-
-**Coded — server-side:** only if no browser UI or feedback is endpoint-driven.
+- Stack picks *how*, not *what*: React → `@kelet-ai/feedback-ui`; other frontends → TS SDK `signal()`; server → Python/TS SDK.
+- Candidates: vote, edit-on-AI-output, copy, retry, abandon, rephrase, session reset. Copy is usually worth it anywhere AI text renders.
+- **Rephrase ≠ prefix match.** Clarifications, negations, frustration, and — most valuable — implicit rephrase (same topic reworded, no keyword). Same for abandon/retry.
 
 Prepare for Checkpoint 2: signal proposals + project name suggestion + "what you'll see" preview.
 

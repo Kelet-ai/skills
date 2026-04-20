@@ -57,3 +57,16 @@ Feedback signals?
 4. **Instrument frontend** — `KeletProvider` at root, nested per flow if multi-project
 5. **Connect feedback** — VoteFeedback + session ID propagation if user-facing
 6. **Verify** — type check, confirm env vars set, open Kelet console and confirm traces appear
+
+## Wrap decision
+
+User-facing conversational turn → wrap in `agentic_session()`. Tooling / health / one-shot (admin, `/healthz`, curl RAG lookups) → don't; server auto-groups unwrapped calls.
+
+Signal + agent run in the same handler → one wrap around both. Nested wraps dedupe but render as two units.
+
+## Shutdown (long-running servers)
+
+Call `shutdown()` explicitly in teardown or spans from the final seconds drop.
+
+- **Python**: auto `atexit`; call in FastAPI lifespan `finally` / Django SIGTERM / Celery `worker_shutdown`.
+- **TS**: auto `beforeExit` only — SIGINT/SIGTERM are not auto-handled (would override host's graceful shutdown). Install your own handler that awaits `shutdown()` before `process.exit(N)`.
