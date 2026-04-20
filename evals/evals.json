@@ -54,6 +54,11 @@
           "id": "api_key_mode_question_asked",
           "description": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets) when synthetic evaluators were selected.",
           "type": "llm"
+        },
+        {
+          "id": "shutdown_wired",
+          "description": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.",
+          "type": "code"
         }
       ]
     },
@@ -84,6 +89,11 @@
         {
           "id": "configure_called",
           "description": "kelet.configure() is still added at startup",
+          "type": "code"
+        },
+        {
+          "id": "shutdown_wired",
+          "description": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.",
           "type": "code"
         }
       ]
@@ -116,6 +126,11 @@
           "id": "phase_v_verification",
           "description": "Includes verification step: trigger LLM call and check console for sessions",
           "type": "llm"
+        },
+        {
+          "id": "shutdown_wired",
+          "description": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.",
+          "type": "code"
         }
       ]
     }
@@ -178,6 +193,11 @@
           "id": "api_key_mode_question_asked",
           "description": "At Checkpoint 2, the skill asks the three-option API key mode AskUserQuestion (paste secret key / I'll grab one / can't paste secrets) when synthetic evaluators were selected.",
           "type": "llm"
+        },
+        {
+          "id": "shutdown_wired",
+          "description": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.",
+          "type": "code"
         }
       ]
     },
@@ -214,6 +234,16 @@
           "id": "explains_value",
           "description": "Explains what each new signal or evaluator catches — not just lists them",
           "type": "llm"
+        },
+        {
+          "id": "shutdown_preserved",
+          "description": "kelet.shutdown() call in the FastAPI lifespan finally: block is preserved (not removed, moved, or duplicated). This was already correctly wired on the main branch — the expand pass must leave it intact.",
+          "type": "llm"
+        },
+        {
+          "id": "no_coded_rephrase_detector",
+          "description": "Does NOT ship a coded rephrase/correction detector that infers rephrase from message text (e.g. .startswith('no ') / keyword matching / regex on user messages paired with kelet.signal()). Rephrase detection, if proposed, must be an LLM synthetic evaluator. Abandon/retry as coded signals tied to explicit triggers (button click, timeout, explicit API) are fine and do NOT fail this assertion — the test is specifically about inferring rephrase from message content.",
+          "type": "llm"
         }
       ]
     },
@@ -245,6 +275,11 @@
           "id": "project_name_unverified_warning",
           "description": "Skill surfaces the 'I can't verify the project name without a key' caveat to the developer.",
           "type": "llm"
+        },
+        {
+          "id": "shutdown_wired",
+          "description": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.",
+          "type": "code"
         }
       ]
     },
@@ -276,6 +311,11 @@
           "id": "recovers_on_correction",
           "description": "After the developer provides a valid project name, the skill re-runs the curl and reaches the success banner.",
           "type": "llm"
+        },
+        {
+          "id": "shutdown_wired",
+          "description": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.",
+          "type": "code"
         }
       ]
     },
@@ -302,6 +342,11 @@
           "id": "recovers_on_correction",
           "description": "After a valid key is provided, the skill re-runs the curl and reaches the success banner.",
           "type": "llm"
+        },
+        {
+          "id": "shutdown_wired",
+          "description": "kelet.shutdown() is called at process teardown — inside FastAPI lifespan finally: block (or equivalent). Without it, BatchSpanProcessor drops buffered spans on pod rotation. Grep the diff for 'kelet.shutdown()' paired with a 'finally:' in app/main.py or wherever lifespan is defined.",
+          "type": "code"
         }
       ]
     }

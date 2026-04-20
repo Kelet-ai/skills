@@ -148,8 +148,8 @@ Think like an investigator planting clues: *if something goes wrong later, what 
 
 - `kind`: `FEEDBACK` · `EDIT` · `EVENT` · `METRIC` · `ARBITRARY` — `source`: `HUMAN` · `LABEL` · `SYNTHETIC`
 - Stack picks *how*, not *what*: React → `@kelet-ai/feedback-ui`; other frontends → TS SDK `signal()`; server → Python/TS SDK.
-- Candidates: vote, edit-on-AI-output, copy, retry, abandon, rephrase, session reset. Copy is usually worth it anywhere AI text renders.
-- **Rephrase / abandon / retry → always LLM synthetic, never coded.** Prefix-match fragments triggers per-phrase, fires on innocent clarifications, and misses implicit rephrase (reworded, no keyword — where most value lives). Right layer: LLM synthetic scoring the *preceding* turn when user corrects/re-asks/abandons. Zero app code. Don't ship prefix-match as a "temporary" substitute.
+- Candidates: vote, edit-on-AI-output, copy, retry, abandon, session reset. Copy is usually worth it anywhere AI text renders. Rephrase is not a coded candidate — see below.
+- **Rephrase → always LLM synthetic, never coded.** Keyword/prefix matching misses implicit rephrase (reworded, no keyword — where most value lives) and fires on innocent clarifications. Right layer: LLM synthetic scoring the *preceding* turn when the user re-asks or corrects. Don't ship prefix-match as a "temporary" substitute. Abandon and retry may be coded when tied to an explicit trigger (button click, timeout, explicit API) — never inferred from message text.
 
 Prepare for Checkpoint 2: signal proposals + project name suggestion + "what you'll see" preview.
 
