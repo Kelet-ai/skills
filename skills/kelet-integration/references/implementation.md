@@ -66,4 +66,9 @@ When a handler emits a signal and runs the agent, open `agentic_session()` once 
 
 ## Shutdown (long-running servers)
 
-Call `kelet.shutdown()` (Python) / `shutdown()` (TS) explicitly in teardown (FastAPI lifespan `finally`, Django SIGTERM handler, Celery `worker_shutdown`, Node service teardown). Auto hooks (atexit / `beforeExit`+SIGINT+SIGTERM) cover clean exits but are bypassed by SIGKILL, `os._exit`, short K8s `terminationGracePeriodSeconds`, and `process.exit(N)`. Spans from the last seconds of traffic drop silently without it. Scripts and one-shots can rely on the auto hooks.
+Call `kelet.shutdown()` (Python) / `shutdown()` (TS) explicitly in teardown. Auto hooks differ between SDKs and both have gaps.
+
+- **Python**: `atexit` covers clean exits; bypassed by SIGKILL, `os._exit`, short K8s `terminationGracePeriodSeconds`. Call in FastAPI lifespan `finally`, Django SIGTERM handler, Celery `worker_shutdown`.
+- **TS**: only `beforeExit` is auto-registered — SIGINT/SIGTERM are NOT (attaching listeners would override the host app's graceful shutdown). Install your own signal handler that awaits `shutdown()` before `process.exit(N)`. Without it, K8s pod evictions drop the last seconds of spans.
+
+Scripts and one-shots can rely on the auto hooks.
