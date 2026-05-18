@@ -5,6 +5,7 @@
 - [Python](#python): `kelet.agent()`, streaming pattern
 - [TypeScript/Node.js](#typescriptnodejs): callback-based `agenticSession`, OTEL peers
 - [Next.js](#nextjs): `KeletExporter`, two silent configs
+- [Temporal](#temporal): `KeletPlugin`, plugin propagation rules
 - [Multi-project apps](#multi-project-apps)
 - [React](#react): `KeletProvider` nesting
 - [No-React frontends](#no-react-frontends): options table
@@ -75,6 +76,55 @@ Two required steps often missed (both **silent** if omitted):
 2. Each Vercel AI SDK call needs `experimental_telemetry: { isEnabled: true }` — telemetry is off by default.
 
 **Vercel AI SDK does not set session IDs automatically** — use `agenticSession()` at the route level.
+
+---
+
+## Temporal
+
+`KeletPlugin` propagates session context through Temporal headers across `start_workflow → workflow → child workflow → activity` so `kelet.signal()` and instrumentation auto-resolve the session inside activities without arg-threading. Register on the client; bundles Temporal's own `OpenTelemetryPlugin` by default so OTel trace context links workflow + activity spans.
+
+**Install:** `kelet[temporal]` (Python) / `kelet @temporalio/plugin @temporalio/interceptors-opentelemetry` (TypeScript).
+
+**Python:**
+
+```python
+from kelet.temporal import KeletPlugin
+from temporalio.client import Client
+
+client = await Client.connect("localhost:7233", plugins=[KeletPlugin()])
+# Workers built from this client inherit the plugin automatically.
+
+async with kelet.agentic_session(session_id="conv-42"):
+    await client.execute_workflow(MyWorkflow.run, ..., id="wf-1", task_queue="ai")
+```
+
+**TypeScript:**
+
+```ts
+import { KeletPlugin } from 'kelet/temporal';
+import { Client } from '@temporalio/client';
+import { Worker } from '@temporalio/worker';
+
+const plugin = new KeletPlugin({ otelPluginOptions: { resource, spanProcessor } });
+const client = new Client({ /* ... */, plugins: [plugin] });
+const worker = await Worker.create({ /* ... */, plugins: [plugin] });
+```
+
+**Plugin propagation differs between SDKs (silent if forgotten):**
+- **Python**: registering on the client auto-applies to every `Worker` constructed from that client.
+- **TypeScript**: the TS SDK doesn't auto-propagate plugins from `Client` to `Worker` — pass `plugins: [plugin]` to **both**. Same plugin instance can be reused.
+
+**Plugin ordering with user-managed OTel:** Kelet bundles `OpenTelemetryPlugin` by default and detects pre-existing OTel via the `[OTel, Kelet]` order — register your own OTel plugin **before** `KeletPlugin` and Kelet skips its bundled OTel. Inverse order (`[Kelet, OTel]`) won't be detected and produces duplicate OTel spans — set `include_otel_plugin=False` (Py) / `includeOtelPlugin: false` (TS) when you must register Kelet first.
+
+**`kelet.signal()` from workflow code:** `KeletPlugin` auto-registers a `_kelet_signal` activity. From workflow code, `kelet.signal()` transparently dispatches through it (HTTP from workflows is non-deterministic). Configure failure behavior with `kelet.configure(signal_failure_mode="swallow"|"raise")` — default `swallow` so telemetry never fails workflows. **Critical:** if a user wires the standalone `KeletInterceptor` (without `KeletPlugin`), the activity is not registered — calling `signal()` from a workflow raises a clear `RuntimeError` pointing at the fix.
+
+**`agentic_session()` inside workflow code:** auto-detects the workflow sandbox and runs in lite mode (contextvars only — no OTel baggage attach, no background drain, both non-deterministic). Behavior outside workflows is unchanged.
+
+**`auto_session` callable must be deterministic:** runs on the workflow side and is invoked during initial execution AND replay. Non-deterministic resolvers (reading `datetime.now()`, making HTTP calls) cause workflow non-determinism failures and block the workflow. Pure resolvers only.
+
+**TypeScript: `autoSession` is client-side only.** Workflows started via Temporal CLI / schedules / non-TS clients won't get a session header. Use `activityAutoSession` as a worker-side backstop. Python's `auto_session` runs on the workflow inbound side, so it covers all start paths.
+
+Full reference: [docs.kelet.ai/integrations/temporal](https://docs.kelet.ai/docs/integrations/temporal/).
 
 ---
 

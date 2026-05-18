@@ -246,9 +246,11 @@ If unlisted — research before omitting.
 **`agentic_session(session_id=...)` REQUIRED** (both silent if omitted):
 
 - **App owns the session ID** (Redis, DB, server-generated): framework doesn't know it → VoteFeedback linkage breaks
-- **You own the loop** (agent A → agent B, Temporal, custom orchestrators): no framework sets the overall session ID → spans appear as unlinked traces. TS: `agenticSession({ sessionId }, callback)`.
+- **You own the loop** (agent A → agent B, custom orchestrators): no framework sets the overall session ID → spans appear as unlinked traces. TS: `agenticSession({ sessionId }, callback)`.
 
 ⚠️ **Vercel AI SDK** — supported framework but doesn't set session IDs: use `agenticSession()` at route level.
+
+🔌 **Temporal — register `KeletPlugin`, then wrap only the `start_workflow` call.** Install `kelet[temporal]` (Py) / `kelet @temporalio/plugin @temporalio/interceptors-opentelemetry` (TS). `KeletPlugin` propagates session through Temporal headers across `start_workflow → workflow → child workflow → activity` automatically — wrap the caller's `start_workflow` in `agentic_session()`; workflow body and every activity inherit. **Don't** wrap each activity. **Plugin propagation differs:** Python auto-applies the client plugin to workers; TypeScript needs `plugins: [plugin]` on both `Client` and `Worker.create`. See [references/stack-notes.md](references/stack-notes.md#temporal) for ordering with user-managed OTel and the workflow-side `kelet.signal()` activity dispatch.
 
 **User identity ≠ session ID.** Stable identifiers (phone, email, user_id) outlive sessions. If the app has a stable user identity: generate UUID per conversation as `kelet_session_id`, regenerate on reset. Silently assess the identifier: non-PII (internal user ID, opaque UUID) → wire as `user_id=` without asking. Obvious PII (phone, email) → omit, but **call it out prominently**: "⚠️ `user_id=` was not set — your user identifier is PII (phone/email). If you have a non-PII user ID, pass it here to enable per-user RCA." Genuinely ambiguous → fold into Checkpoint 1, don't burn a separate slot.
 
