@@ -29,7 +29,10 @@ N agentic flows?
 Stack?
 ├─► Python   ──► kelet.configure() + agentic_session() context manager
 ├─► Node.js  ──► configure() + agenticSession({sessionId}, callback)
-└─► Next.js  ──► instrumentation.ts + KeletExporter
+├─► Next.js  ──► instrumentation.ts + KeletExporter
+└─► Temporal ──► configure() + KeletPlugin on Client (Py: workers inherit; TS: also Worker.create)
+                  Caller wraps client.start_workflow in agentic_session()
+                  No per-activity wrapping — KeletPlugin propagates session through Temporal headers
 
 User-facing with React?
 ├─► Yes ──► KeletProvider at root
@@ -50,8 +53,9 @@ Feedback signals?
    write to correct file. Always write `KELET_PROJECT` — missing = silent routing to wrong project, no error raised.
 2. **Install** — detect package manager from lockfiles (`uv.lock`→uv, `poetry.lock`→poetry, `Pipfile`→pipenv, else pip;
    `bun.lockb`→bun, `pnpm-lock.yaml`→pnpm, `yarn.lock`→yarn, else npm).
-   Python: `kelet`; extras only if needed (`kelet[google-adk]`, `kelet[openai]`, `kelet[anthropic]`, `kelet[langchain]`, `kelet[all]`).
+   Python: `kelet`; extras only if needed (`kelet[google-adk]`, `kelet[openai]`, `kelet[anthropic]`, `kelet[langchain]`, `kelet[temporal]`, `kelet[all]`).
    Node.js/Next.js: `kelet` + OTEL peers (`@opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http`).
+   Temporal (TS): `kelet @temporalio/plugin @temporalio/interceptors-opentelemetry` — `@temporalio/*` are optional peer deps required by the `kelet/temporal` subpath import.
    React: `@kelet-ai/feedback-ui`.
 3. **Instrument server** — `configure()` at startup + `agentic_session()` per flow
 4. **Instrument frontend** — `KeletProvider` at root, nested per flow if multi-project
@@ -63,6 +67,8 @@ Feedback signals?
 User-facing conversational turn → wrap in `agentic_session()`. Tooling / health / one-shot (admin, `/healthz`, curl RAG lookups) → don't; server auto-groups unwrapped calls.
 
 Signal + agent run in the same handler → one wrap around both. Nested wraps dedupe but render as two units.
+
+**Temporal**: wrap **the caller's `client.start_workflow` / `client.execute_workflow`** in `agentic_session()` once. The `KeletPlugin` interceptors propagate the session through Temporal headers — workflow body, child workflows, and every activity inherit automatically. Don't wrap each activity. Don't wrap the workflow body (workflow code is sandbox-restricted; `agentic_session` auto-detects and runs in lite mode anyway, but it's redundant when the inbound interceptor already set context).
 
 ## Shutdown (long-running servers)
 

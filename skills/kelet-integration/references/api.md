@@ -2,21 +2,23 @@
 
 ## Package Names
 
-| Stack                | Package                                                                                                               |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Python               | `kelet` — optional extras: `kelet[google-adk]`, `kelet[openai]`, `kelet[anthropic]`, `kelet[langchain]`, `kelet[all]` |
-| TypeScript / Node.js | `kelet @opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http`                      |
-| React frontend       | `@kelet-ai/feedback-ui`                                                                                               |
+| Stack                | Package                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Python               | `kelet` — optional extras: `kelet[google-adk]`, `kelet[openai]`, `kelet[anthropic]`, `kelet[langchain]`, `kelet[temporal]`, `kelet[all]` |
+| TypeScript / Node.js | `kelet @opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http`                                     |
+| Temporal (TS, extra) | `@temporalio/plugin @temporalio/interceptors-opentelemetry` (peer deps; required when importing `kelet/temporal`)                    |
+| React frontend       | `@kelet-ai/feedback-ui`                                                                                                              |
 
 ## Python SDK
 
 Functions (all in `kelet` namespace):
 
-- `kelet.configure(*, api_key=None, project=None, base_url=None, strict=False)` — call once at startup. All params default
+- `kelet.configure(*, api_key=None, project=None, base_url=None, strict=False, signal_failure_mode="swallow")` — call once at startup. All params default
   to env vars (`KELET_API_KEY`, `KELET_PROJECT`, `KELET_API_URL`); `kelet.configure()` with no args works when
   env vars are set. If credentials are missing, `configure()` logs one warning and installs a no-op — `signal()`
   and `agentic_session()` become silent no-ops. Pass `strict=True` to fail-fast instead (raises `ValueError`).
   Explicit empty `api_key=""` still raises regardless of `strict`.
+  `signal_failure_mode` (`"swallow"` default | `"raise"`): controls behavior when `kelet.signal()` is called from Temporal workflow code, dispatched through the auto-registered `_kelet_signal` activity, and Temporal exhausts retries. `"swallow"` logs and drops; `"raise"` surfaces an `ApplicationError` to the workflow.
 - `kelet.agentic_session(*, session_id, user_id=None, project=None)` — async/sync context manager AND decorator
 - `kelet.agent(*, name)` — context manager; names an agent within a session for readable multi-agent traces
 - `async kelet.signal(kind, source, *, session_id=None, trace_id=None, trigger_name=None, score=None, value=None, confidence=None, metadata=None, timestamp=None)` —
@@ -53,6 +55,20 @@ Other functions:
 Use `KeletExporter` in `instrumentation.ts` via `@vercel/otel`:
 
 - `new KeletExporter({ apiKey, project })`
+
+## Temporal (`kelet[temporal]` Py / `kelet/temporal` TS)
+
+**Python** — `from kelet.temporal import KeletPlugin, KeletInterceptor`
+
+- `KeletPlugin(*, auto_session=False, include_otel_plugin=True)` — recommended. Subclasses `temporalio.plugin.SimplePlugin`. Bundles Temporal's `OpenTelemetryPlugin` by default (auto-skipped if a prior plugin already registered an OTel interceptor in the `[OTel, Kelet]` order). Auto-registers `_kelet_signal` activity for workflow-context signal dispatch. Workers built from a client with this plugin inherit it automatically (Python only).
+  - `auto_session`: `False` | `True` | `Callable[[WorkflowInfo|ActivityInfo], str|None]` — when no `agentic_session` is set, derive one. `True` extracts the segment after `/session/` in the workflow ID; otherwise pass a callable. **Must be deterministic** (runs on workflow side, invoked during initial run AND replay).
+- `KeletInterceptor(*, auto_session=False)` — standalone interceptor for users who don't want the plugin wrapper. **Does not register the signal activity** — calling `kelet.signal()` from workflow code raises a clear `RuntimeError` pointing at `KeletPlugin`.
+
+**TypeScript** — `import { KeletPlugin } from 'kelet/temporal'`
+
+- `new KeletPlugin({ autoSession?, activityAutoSession?, includeOtelPlugin?, otelPluginOptions? })` — extends `SimplePlugin` from `@temporalio/plugin`. **TS doesn't auto-propagate plugins from Client to Worker — pass to both** `new Client({plugins: [plugin]})` and `Worker.create({plugins: [plugin]})`.
+  - `autoSession` runs **client-side** at `start_workflow` time. Workflows started outside the TS client (CLI / schedules / non-TS clients) won't get a session header — use `activityAutoSession` as worker-side backstop.
+  - `otelPluginOptions: { resource, spanProcessor }` is **required** when `includeOtelPlugin` is true (default).
 
 ## React (`@kelet-ai/feedback-ui`)
 
