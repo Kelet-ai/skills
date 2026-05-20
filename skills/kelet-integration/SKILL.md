@@ -235,7 +235,7 @@ AND-gating turns a blank-project drift into silent no-traces. Empty project with
 A session = one unit of work. New context = new session.
 
 **`agentic_session()` NOT required** (auto-instrumented):
-LangChain/LangGraph · LlamaIndex · CrewAI · Haystack · Google ADK (`kelet[google-adk]` recommended) · pydantic-ai · DSPy · Langfuse · Langroid · anything using OpenInference/OpenLLMetry
+LangChain/LangGraph · LlamaIndex · CrewAI · Haystack · Google ADK (`kelet[google-adk]` recommended) · pydantic-ai · DSPy · Langfuse · Langroid · `@anthropic-ai/claude-agent-sdk` (Py + TS — see Claude Agent SDK note below) · anything using OpenInference/OpenLLMetry
 
 ⚠️ **Override — read the REQUIRED block below first.** The list above assumes the framework also owns the session ID (short-lived in-process runs). If the app generates the session ID itself (Redis, DB, server-issued UUID) or you orchestrate multiple LLM calls across requests, `agentic_session(session_id=...)` is REQUIRED *regardless of framework* — the framework doesn't know your ID and spans become unlinked. When in doubt, wrap.
 
@@ -251,6 +251,8 @@ If unlisted — research before omitting.
 ⚠️ **Vercel AI SDK** — supported framework but doesn't set session IDs: use `agenticSession()` at route level.
 
 🔌 **Temporal — register `KeletPlugin`, then wrap only the `start_workflow` call.** Install `kelet[temporal]` (Py) / `kelet @temporalio/plugin @temporalio/interceptors-opentelemetry` (TS). `KeletPlugin` propagates session through Temporal headers across `start_workflow → workflow → child workflow → activity` automatically — wrap the caller's `start_workflow` in `agentic_session()`; workflow body and every activity inherit. **Don't** wrap each activity. **Plugin propagation differs:** Python auto-applies the client plugin to workers; TypeScript needs `plugins: [plugin]` on both `Client` and `Worker.create`. See [references/stack-notes.md](references/stack-notes.md#temporal) for ordering with user-managed OTel and the workflow-side `kelet.signal()` activity dispatch.
+
+🤖 **Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)** — `kelet.configure()` auto-injects the seven `CLAUDE_CODE_*` / `OTEL_EXPORTER_OTLP_*` env vars into the spawned `claude` subprocess (Python: into `ClaudeAgentOptions.env`; TypeScript: into `process.env` set-if-missing). No code changes — `from claude_agent_sdk import query` (Python) or `import { query } from '@anthropic-ai/claude-agent-sdk'` (TS) works directly. **TS ESM caveat:** if the user passes a custom `options.env`, use `kelet/claude-agent-sdk/shim` (drop-in shim) or `node --import kelet/claude-agent-sdk/register` (loader) — frozen ESM bindings prevent `configure()`'s namespace patch. **Conflict:** Python overrides any conflicting CC env vars in the subprocess (warn-once); TS defers to existing `process.env` (warn-once). To opt out: `inject_cc_telemetry=False` (Py) / `injectCcTelemetry: false` (TS).
 
 **User identity ≠ session ID.** Stable identifiers (phone, email, user_id) outlive sessions. If the app has a stable user identity: generate UUID per conversation as `kelet_session_id`, regenerate on reset. Silently assess the identifier: non-PII (internal user ID, opaque UUID) → wire as `user_id=` without asking. Obvious PII (phone, email) → omit, but **call it out prominently**: "⚠️ `user_id=` was not set — your user identifier is PII (phone/email). If you have a non-PII user ID, pass it here to enable per-user RCA." Genuinely ambiguous → fold into Checkpoint 1, don't burn a separate slot.
 

@@ -6,6 +6,7 @@
 - [TypeScript/Node.js](#typescriptnodejs): callback-based `agenticSession`, OTEL peers
 - [Next.js](#nextjs): `KeletExporter`, two silent configs
 - [Temporal](#temporal): `KeletPlugin`, plugin propagation rules
+- [Claude Agent SDK](#claude-agent-sdk): auto env-injection, ESM caveats
 - [Multi-project apps](#multi-project-apps)
 - [React](#react): `KeletProvider` nesting
 - [No-React frontends](#no-react-frontends): options table
@@ -125,6 +126,54 @@ const worker = await Worker.create({ /* ... */, plugins: [plugin] });
 **TypeScript: `autoSession` is client-side only.** Workflows started via Temporal CLI / schedules / non-TS clients won't get a session header. Use `activityAutoSession` as a worker-side backstop. Python's `auto_session` runs on the workflow inbound side, so it covers all start paths.
 
 Full reference: [docs.kelet.ai/integrations/temporal](https://docs.kelet.ai/docs/integrations/temporal/).
+
+---
+
+## Claude Agent SDK
+
+`@anthropic-ai/claude-agent-sdk` (Python `claude-agent-sdk` / TS `@anthropic-ai/claude-agent-sdk`) spawns a `claude` CLI subprocess for each `query()` / `ClaudeSDKClient` call. Claude Code emits OTLP traces, logs, and metrics when seven env vars are set: `CLAUDE_CODE_ENABLE_TELEMETRY`, `OTEL_LOGS_EXPORTER`, `OTEL_METRICS_EXPORTER`, `OTEL_TRACES_EXPORTER`, `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`. Without those, **zero traffic** lands at Kelet — silent failure mode.
+
+**Install:** `kelet[claude-agent-sdk]` (Python) / `kelet` plus optional `@opentelemetry/sdk-logs @opentelemetry/exporter-logs-otlp-http @opentelemetry/api-logs` (TypeScript, only needed for reasoning capture).
+
+**Python — fully automatic:**
+
+```python
+import kelet
+from claude_agent_sdk import query
+
+kelet.configure(api_key="...", project="my-agent")  # wraps query + ClaudeSDKClient
+
+async for msg in query(prompt="hello"):
+    ...
+```
+
+The wrap injects the seven keys into `ClaudeAgentOptions.env` per call — never touches `os.environ`, so the host process's other OTel pipelines stay intact. Override on conflict (subprocess scope only) + warn-once.
+
+**Python — import order:** `kelet.configure()` must run before `from claude_agent_sdk import query` for the wrap to take effect on the module-level `query` symbol. `ClaudeSDKClient` is patched at the class level — order-independent.
+
+**TypeScript — Layer A (process.env, default path):**
+
+```typescript
+import { configure } from 'kelet';
+configure({ apiKey: process.env.KELET_API_KEY!, project: 'my-agent' });
+
+import { query } from '@anthropic-ai/claude-agent-sdk';
+```
+
+`configure()` populates `process.env` set-if-missing. **Defers** to existing values (warn-once) — never overrides, because the mutation is process-wide.
+
+**TypeScript — Layer B (when user passes `options.env`):** the `claude` JS SDK uses `m6 ? {...m6} : {...process.env}` — passing `options.env` REPLACES `process.env` instead of merging. ESM bindings are frozen, so `configure()` cannot patch `query` post-import. Use:
+
+- **Loader (Node/tsx):** `node --import kelet/claude-agent-sdk/register app.js`
+- **Drop-in shim (Bun, all runtimes):** `import { query, ClaudeSDKClient } from 'kelet/claude-agent-sdk/shim'`
+
+Both wire Kelet's seven keys into `options.env` set-if-missing on every call.
+
+**Opt out:** `inject_cc_telemetry=False` (Python) / `injectCcTelemetry: false` (TS). If you opt out and don't set `CLAUDE_CODE_ENABLE_TELEMETRY=1` yourself, the SDK emits a one-shot info log so the silent-failure mode is visible.
+
+**Reasoning capture:** Kelet emits `kelet.reasoning` log records (scope `com.anthropic.claude_code.kelet_reasoning`) for each redacted ThinkingBlock yielded by `query()` / `receive_messages` / `receive_response`. Attributes: `reasoning.text`, `reasoning.signature`, `reasoning.message_id`, `session.id`. TypeScript reasoning capture requires the optional OTLP-logs peer deps; without them, env injection still works.
+
+Full reference: [docs.kelet.ai/integrations/claude-agent-sdk](https://docs.kelet.ai/docs/integrations/claude-agent-sdk/).
 
 ---
 
