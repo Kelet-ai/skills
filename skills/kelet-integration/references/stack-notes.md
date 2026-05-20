@@ -139,9 +139,10 @@ Full reference: [docs.kelet.ai/integrations/temporal](https://docs.kelet.ai/docs
 
 ```python
 import kelet
-from claude_agent_sdk import query
 
 kelet.configure(api_key="...", project="my-agent")  # wraps query + ClaudeSDKClient
+
+from claude_agent_sdk import query  # import AFTER configure() so the wrap is visible
 
 async for msg in query(prompt="hello"):
     ...
