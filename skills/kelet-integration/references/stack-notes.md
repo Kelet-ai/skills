@@ -78,6 +78,14 @@ Two required steps often missed (both **silent** if omitted):
 
 **Vercel AI SDK does not set session IDs automatically** — use `agenticSession()` at the route level.
 
+**Reasoning capture (depends on `ai` version):**
+
+| `ai` version    | Setup                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------- |
+| `^4.x`, `^5.x`  | `kelet/aisdk` import OR `node --import kelet/reasoning/register app.js`                |
+| `^6.0.74+`      | Native — just call `configure()`; AI SDK emits `ai.response.reasoning` itself          |
+| `^7.0.0-beta+`  | `npm i @ai-sdk/otel` — `configure()` auto-registers it for full gen_ai semconv         |
+
 ---
 
 ## Temporal
@@ -173,6 +181,14 @@ Both wire Kelet's seven keys into `options.env` set-if-missing on every call.
 **Opt out:** `inject_cc_telemetry=False` (Python) / `injectCcTelemetry: false` (TS). If you opt out and don't set `CLAUDE_CODE_ENABLE_TELEMETRY=1` yourself, the SDK emits a one-shot info log so the silent-failure mode is visible.
 
 **Reasoning capture:** Kelet emits `kelet.reasoning` log records (scope `com.anthropic.claude_code.kelet_reasoning`) for each redacted ThinkingBlock yielded by `query()` / `receive_messages` / `receive_response`. Attributes: `reasoning.text`, `reasoning.signature`, `reasoning.message_id`, `session.id`. TypeScript reasoning capture requires the optional OTLP-logs peer deps; without them, env injection still works.
+
+**Session grouping (multi-`query()` workflows):** Each `query()` invocation gets a fresh `session.id` UUID from CC, so by default multi-`query()` workflows split into N Kelet sessions. Wrapping in `agentic_session(session_id="S")` re-unifies them: the SDK injects `OTEL_RESOURCE_ATTRIBUTES=gen_ai.conversation.id=S,enduser.id=…,gen_ai.agent.name=…,metadata.<k>=…,kelet.project=…` into the spawned subprocess's env, CC's SDK stamps those keys on the OTLP `Resource` of every span/log it emits, and the workflow extractor reads them to set `runs.session_id = "S"` for all contained CC interactions. CC's own `options.session_id` / `options.resume` stay 100% under user control — we only attach an observation tag. Both SDKs also emit a `claude_code.sdk_query` wrapper span (scope `kelet.claude_agent_sdk`) so the server's per-session reconciler can attribute every contained CC interaction to the right Kelet session group.
+
+**Identity propagation:** `agentic_session(user_id="u-1")` maps to `enduser.id` (OTel GenAI semconv slot for the human end-user the agent acts on behalf of), distinct from CC's own `user.id` (anonymous installation identifier — always emitted, NOT promoted to `runs.metadata`). `kelet.agent(name="planner")` maps to `gen_ai.agent.name` (becomes `runs.agent_name` for outer COMPLETION + event runs; CC's own `subagent_type` always wins for subagent runs). `**kwargs` to `agentic_session` map to `metadata.<k>`.
+
+**Long-running CC:** `OTEL_RESOURCE_ATTRIBUTES` is set once at subprocess spawn and is immutable for that subprocess's lifetime. So hours-long agent loops keep reporting the same Kelet session id even after the wrapping `query()` returned to the host. Mid-stream `kelet.agent()` switches do NOT relabel an already-spawned subprocess; new `query()` calls inside the new block start fresh subprocesses.
+
+**Bash/MCP/hooks subprocesses don't inherit OTEL_*:** per CC monitoring-usage docs, "Claude Code does not pass `OTEL_*` environment variables to the subprocesses it spawns." Bash commands and MCP server processes started inside a CC session are NOT instrumented; `claude_code.tool` spans for them carry tool-level data only, not nested OTel.
 
 Full reference: [docs.kelet.ai/integrations/claude-agent-sdk](https://docs.kelet.ai/docs/integrations/claude-agent-sdk/).
 
