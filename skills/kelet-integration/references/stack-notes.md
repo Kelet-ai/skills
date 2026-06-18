@@ -131,7 +131,20 @@ const worker = await Worker.create({ /* ... */, plugins: [plugin] });
 
 **`auto_session=True` uses the Temporal run ID.** Python `auto_session=True` derives the root session from the run ID (`WorkflowInfo.run_id` / `ActivityInfo.workflow_run_id`) — one run = one session. It's resolved once at workflow entry; child workflows, activities, and `continue_as_new` inherit it via the propagated header (header always wins over re-derivation, so the whole chain shares one session). Pass a callable for custom mapping — it runs on the workflow side and is invoked during initial execution AND replay, so it **must be deterministic** (no `datetime.now()`, no HTTP). Pure resolvers only.
 
-**TypeScript: `autoSession` is callable-only and client-side.** There's no boolean form — the run ID doesn't exist when the client interceptor runs (the server mints it as `start` returns), so the client can't derive from it. For run-ID auto-derivation use `activityAutoSession: true` on the worker (`info.workflowExecution.runId`). Workflows started via Temporal CLI / schedules / non-TS clients get a session only through `activityAutoSession`. Python's `auto_session` runs on the workflow inbound side, so a single `auto_session=True` covers all start paths.
+**TypeScript: `autoSession` is callable-only (client-side); `activityAutoSession: true` does run-ID derivation worker-side.** There's no client boolean — the run ID doesn't exist when the client interceptor runs (the server mints it as `start` returns). Set `activityAutoSession: true`: the top-level workflow's inbound interceptor stamps `workflowInfo().runId`, so child workflows and activities inherit it via headers (one session per chain), and it also backstops workflows started via CLI / schedules / non-TS clients. Python's `auto_session=True` does the same on the workflow inbound side, so a single flag covers all start paths on both SDKs.
+
+**Session ID already in the workflow ID? Prefer it over the run ID.** Before defaulting to `auto_session=True`/`activityAutoSession: true`, check how the app names its workflows. If the workflow ID already embeds the app's own conversation/session identifier (e.g. `chat/{conversationId}`, `order-{orderId}`), that is a more meaningful, app-stable session than the per-run Temporal run ID — and it survives `continue_as_new` and retries with the same workflow ID. In that case pass a **deterministic callable** that extracts it instead:
+
+```python
+# Python — workflow-inbound resolver, receives WorkflowInfo
+KeletPlugin(auto_session=lambda info: info.workflow_id.split("/", 1)[-1])
+```
+```ts
+// TS — client-side resolver, receives { workflowType, workflowId }
+new KeletPlugin({ autoSession: ({ workflowId }) => workflowId.split('/').at(-1) });
+```
+
+Only fall back to the run ID (`True`) when the workflow ID carries no usable session identifier. ⚠️ Don't extract from the workflow ID if the same ID is **reused across distinct conversations** (idempotency keys, singleton workflows) — that collapses separate sessions into one; use the run ID there. The callable runs on the workflow side during initial execution AND replay, so it must be pure.
 
 Full reference: [docs.kelet.ai/integrations/temporal](https://docs.kelet.ai/docs/integrations/temporal/).
 
