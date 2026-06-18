@@ -144,7 +144,7 @@ KeletPlugin(auto_session=lambda info: info.workflow_id.split("/", 1)[-1])
 new KeletPlugin({ autoSession: ({ workflowId }) => workflowId.split('/').at(-1) });
 ```
 
-Only fall back to the run ID (`True`) when the workflow ID carries no usable session identifier. ⚠️ Don't extract from the workflow ID if the same ID is **reused across distinct conversations** (idempotency keys, singleton workflows) — that collapses separate sessions into one; use the run ID there. The callable runs on the workflow side during initial execution AND replay, so it must be pure.
+Only fall back to the run ID (`True`) when the workflow ID carries no usable session identifier. ⚠️ Don't extract from the workflow ID if the same ID is **reused across distinct conversations** (idempotency keys, singleton workflows) — that collapses separate sessions into one; use the run ID there. ⚠️ The **Python** callable runs on the workflow side during initial execution AND replay, so it must be pure (no `datetime.now()`, no HTTP, no random) — non-deterministic resolvers cause replay failures. The **TS** callable runs client-side at `start_workflow` (not during workflow replay), so it isn't bound by replay determinism, but keep it pure anyway so the same start always maps to the same session.
 
 Full reference: [docs.kelet.ai/integrations/temporal](https://docs.kelet.ai/docs/integrations/temporal/).
 
