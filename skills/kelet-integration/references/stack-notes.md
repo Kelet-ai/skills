@@ -129,9 +129,9 @@ const worker = await Worker.create({ /* ... */, plugins: [plugin] });
 
 **`agentic_session()` inside workflow code:** auto-detects the workflow sandbox and runs in lite mode (contextvars only — no OTel baggage attach, no background drain, both non-deterministic). Behavior outside workflows is unchanged.
 
-**`auto_session` callable must be deterministic:** runs on the workflow side and is invoked during initial execution AND replay. Non-deterministic resolvers (reading `datetime.now()`, making HTTP calls) cause workflow non-determinism failures and block the workflow. Pure resolvers only.
+**`auto_session=True` uses the Temporal run ID.** Python `auto_session=True` derives the root session from the run ID (`WorkflowInfo.run_id` / `ActivityInfo.workflow_run_id`) — one run = one session. It's resolved once at workflow entry; child workflows, activities, and `continue_as_new` inherit it via the propagated header (header always wins over re-derivation, so the whole chain shares one session). Pass a callable for custom mapping — it runs on the workflow side and is invoked during initial execution AND replay, so it **must be deterministic** (no `datetime.now()`, no HTTP). Pure resolvers only.
 
-**TypeScript: `autoSession` is client-side only.** Workflows started via Temporal CLI / schedules / non-TS clients won't get a session header. Use `activityAutoSession` as a worker-side backstop. Python's `auto_session` runs on the workflow inbound side, so it covers all start paths.
+**TypeScript: `autoSession` is callable-only and client-side.** There's no boolean form — the run ID doesn't exist when the client interceptor runs (the server mints it as `start` returns), so the client can't derive from it. For run-ID auto-derivation use `activityAutoSession: true` on the worker (`info.workflowExecution.runId`). Workflows started via Temporal CLI / schedules / non-TS clients get a session only through `activityAutoSession`. Python's `auto_session` runs on the workflow inbound side, so a single `auto_session=True` covers all start paths.
 
 Full reference: [docs.kelet.ai/integrations/temporal](https://docs.kelet.ai/docs/integrations/temporal/).
 

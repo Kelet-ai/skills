@@ -61,13 +61,13 @@ Use `KeletExporter` in `instrumentation.ts` via `@vercel/otel`:
 **Python** — `from kelet.temporal import KeletPlugin, KeletInterceptor`
 
 - `KeletPlugin(*, auto_session=False, include_otel_plugin=True)` — recommended. Subclasses `temporalio.plugin.SimplePlugin`. Bundles Temporal's `OpenTelemetryPlugin` by default (auto-skipped if a prior plugin already registered an OTel interceptor in the `[OTel, Kelet]` order). Auto-registers `_kelet_signal` activity for workflow-context signal dispatch. Workers built from a client with this plugin inherit it automatically (Python only).
-  - `auto_session`: `False` | `True` | `Callable[[WorkflowInfo|ActivityInfo], str|None]` — when no `agentic_session` is set, derive one. `True` extracts the segment after `/session/` in the workflow ID; otherwise pass a callable. **Must be deterministic** (runs on workflow side, invoked during initial run AND replay).
+  - `auto_session`: `False` | `True` | `Callable[[WorkflowInfo|ActivityInfo], str|None]` — when no `agentic_session` is set, derive one. `True` uses the Temporal run ID (`WorkflowInfo.run_id` / `ActivityInfo.workflow_run_id`) — one run = one session, inherited downstream via the propagated header. Otherwise pass a callable. **Must be deterministic** (runs on workflow side, invoked during initial run AND replay).
 - `KeletInterceptor(*, auto_session=False)` — standalone interceptor for users who don't want the plugin wrapper. **Does not register the signal activity** — calling `kelet.signal()` from workflow code raises a clear `RuntimeError` pointing at `KeletPlugin`.
 
 **TypeScript** — `import { KeletPlugin } from 'kelet/temporal'`
 
 - `new KeletPlugin({ autoSession?, activityAutoSession?, includeOtelPlugin?, otelPluginOptions? })` — extends `SimplePlugin` from `@temporalio/plugin`. **TS doesn't auto-propagate plugins from Client to Worker — pass to both** `new Client({plugins: [plugin]})` and `Worker.create({plugins: [plugin]})`.
-  - `autoSession` runs **client-side** at `start_workflow` time. Workflows started outside the TS client (CLI / schedules / non-TS clients) won't get a session header — use `activityAutoSession` as worker-side backstop.
+  - `autoSession` is **callable-only** (`(input: { workflowType, workflowId }) => string | undefined`) and runs **client-side** at `start_workflow` time. No boolean form — the run ID doesn't exist yet at client `start`. For run-ID auto-derivation use `activityAutoSession: true` on the worker (`info.workflowExecution.runId`); it's also the backstop for workflows started outside the TS client (CLI / schedules / non-TS clients).
   - `otelPluginOptions: { resource, spanProcessor }` is **required** when `includeOtelPlugin` is true (default).
 
 ## React (`@kelet-ai/feedback-ui`)
